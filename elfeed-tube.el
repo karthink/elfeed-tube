@@ -1,11 +1,36 @@
+;;; elfeed-tube.el --- Fetch metadata from Invidious for Elfeed  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2022  Karthik Chikmagalur
+
+;; Author: Karthik Chikmagalur <karthik.chikmagalur@gmail.com>
+;; Version: 0.45
+;; Package-Requires: ((emacs "26.1") (request "0.3.3"))
+;; Keywords: news, convenience, multimedia
+;; URL: https://github.com/karthink/elfeed-tube
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; 
+
+;;; Code:
+
 (require 'elfeed)
 (require 'request)
 (require 'cl-lib)
-
-;; ** YOUTUBE METADATA
-
-;; Fetch metadata from Invidious for Youtube feeds
-(advice-add elfeed-show-refresh-function :after #'elfeed-tube-show-info)
+(require 'subr-x)
 
 (defgroup elfeed-tube nil
   "Elfeed-tube: View youtube details in Elfeed"
@@ -23,43 +48,47 @@ Set this to NIL to disable showing thumbnails."
                  (const :tag "Medium thumbnails" medium)
                  (const :tag "Small thumbnails" small)))
 
-(defcustom elfeed-tube-always-add-to-db nil
-  "Should elfeed-tube always add to the Elfeed database?
+(defcustom elfeed-tube-invidious-url nil
+  "Invidious URL to use for retrieving data.
 
-Setting this to T will always save fetched information to the
-Elfeed database.
-
-When set to NIL, you can still add a specific Elfeed entry to the
-database by calling `elfeed-tube-add-info' with a prefix
-argument. When this option is set to T, the prefix argument
-behavior is inverted."
+Setting this is optional: If left unset, elfeed-tube will locate
+and use an Invidious URL at random. This should be set to a
+string, for example \"https://invidio.us\". "
   :group 'elfeed-tube
-  :type 'boolean)
+  :type '(choice (string :tag "Custom URL")
+                 (const :tag "Disabled (Auto)" nil)))
 
-(defvar elfeed-tube-invidious-url "https://vid.puffyan.us")
+(defvar elfeed-tube--debug t)
 (defvar elfeed-tube-add-duration t)
+(defvar elfeed-tube-invidious-url "https://vid.puffyan.us")
+(defvar elfeed-tube--api-videos-path "/api/v1/videos/")
 (defvar elfeed-tube--info-table (make-hash-table :test #'equal))
+(defvar elfeed-tube--invidious-servers nil)
+
+(defmacro elfeed-tube--defcallback (name args &rest body)
+  "Create a callback function NAME for a web request.
+
+ARGS is a list of parameters used by NAME that are passed as part
+of the request response. The first element of ARGS should always
+be DATA, the response data. BODY is the body of the callback
+function."
+  (declare (indent defun))
+  `(cl-defun ,name (&key (data nil)
+                         (error-thrown nil)
+                         (symbol-status nil)
+                         (response nil)
+                         &allow-other-keys)
+     (let* ((settings (request-response-settings response))
+            ,@(mapcar (lambda (s) `(,s (plist-get settings
+                                             ,(elfeed-tube--keywordize s))))
+                      (or (cdr-safe args) '(symbol-status))))
+       ,@body)))
+
+(defun elfeed-tube--keywordize (s)
+  (intern (concat ":" (symbol-name s))))
 
 (defun elfeed-tube--youtube-p (entry)
   (string-match-p "youtube\\.com" (elfeed-entry-link entry)))
-
-(defun elfeed-tube-fetch-info (entry &optional db-insert-p)
-  "Fetch video information for the current Elfeed ENTRY or ENTRY at point.
-
-The action of the prefix argument DB-INSERT-P depends on the value of `elfeed-tube-always-add-to-db'.
-
-- When this option is NIL (default), the fetched information is cached for this session only. Caling with prefix argument DB-INSERT-P will cause the fetched information to be written to the Elfeed database instead.
-- When this option is T, the fetched information is written to the database by default. Calling with prefix argument DB-INSERT-P will cause the fetched information to be cached for this Emacs session only.
-
-In either case, a double prefix argument will force the fetching of information from the Internet."
-  (interactive (list (pcase major-mode
-                       ('elfeed-search-mode
-                        (elfeed-search-selected 'ignore-region))
-                       ('elfeed-show-mode elfeed-show-entry))
-                     current-prefix-arg))
-  (if  (elfeed-tube--youtube-p entry)
-      (elfeed-tube--fetch-info-maybe entry db-insert-p)
-    (message "Not at a Youtube video.")))
 
 (defun elfeed-tube--get-video-id (entry)
   (cl-assert (elfeed-entry-p entry))
@@ -68,69 +97,155 @@ In either case, a double prefix argument will force the fetching of information 
                   cdr-safe
                   (substring 9))))
 
-(defun elfeed-tube--fetch-info-maybe (entry &optional db-insert-p)
+(defun elfeed-tube--get-invidious-url ()
+  (or (and (not (string= "" elfeed-tube-invidious-url))
+           elfeed-tube-invidious-url)
+      (and elfeed-tube--invidious-servers
+           (elt elfeed-tube--invidious-servers
+                (cl-random (length elfeed-tube--invidious-servers))))
+      "https://invidio.us"))
+
+(defun elfeed-tube--fetch-maybe (entry &optional db-insert-p attempts)
   (when-let*
-      ((video-id (elfeed-tube--get-video-id entry))
+      ((attempts (or attempts 3))
+       (video-id (elfeed-tube--get-video-id entry))
        (api-url (concat
-                 elfeed-tube-invidious-url
-                 "/api/v1/videos/"
+                 (elfeed-tube--get-invidious-url)
+                 elfeed-tube--api-videos-path
                  video-id)))
-    (if-let ((_ (not (equal db-insert-p '(16))))
-             (content (gethash video-id elfeed-tube--info-table)))
-        (progn
-          (message "Info for entry already fetched. Press 'C-u C-u %s' to force refresh." (this-command-keys))
-          (elfeed-tube-show-info))
-      (request api-url
+    (let ((content (gethash video-id elfeed-tube--info-table)))
+      (cond
+       ((and content (equal db-insert-p '(4)))
+        (elfeed-tube--write-db entry content)
+        (message "Updated the database for '%s'" (elfeed-entry-title entry)))
+       ((and content (not (equal db-insert-p '(16))))
+        (message
+         "Info for entry already fetched. Press 'C-u C-u %s' to force refresh."
+         (this-command-keys))
+        (elfeed-tube-show))
+       ((> attempts 0)
+        (when elfeed-tube--debug
+          (message "Attempting to access %s" api-url))
+        (request api-url
         :type "GET"
         :params '(("fields" . "videoThumbnails,descriptionHtml,lengthSeconds"))
         :parser (lambda ()
                   (let ((json-object-type (quote plist)))
                     (json-read)))
+        :attempts attempts
         :entry entry
         :db-insert-p db-insert-p
         :success #'elfeed-tube--process-info
-        :error #'elfeed-tube--handle-error)
-      (message "Fetching info for video '%s'" (elfeed-entry-title entry)))))
+        :error #'elfeed-tube--handle-retries)
+      (message "Fetching info for video '%s'" (elfeed-entry-title entry)))
+       (t (message "Could not fetch info for video '%s'" (elfeed-entry-title entry)))))))
 
-(cl-defun elfeed-tube--handle-error (&key (data nil)
-                                         (error-thrown nil)
-                                         (symbol-status nil)
-                                         (response nil)
-                                         &allow-other-keys)
-  (message "request failed with %s" error-thrown))
+(defun elfeed-tube--fetch-alternate (entry &optional db-insert-p attempts)
+  (cl-assert (not (null elfeed-tube--invidious-servers)))
+  (let ((elfeed-tube-invidious-url
+         (elt elfeed-tube--invidious-servers
+              (cl-random (length elfeed-tube--invidious-servers)))))
+    (elfeed-tube--fetch-maybe entry db-insert-p attempts)))
 
-(cl-defun elfeed-tube--process-info (&key (data nil)
-                                         (error-thrown nil)
-                                         (symbol-status nil)
-                                         (response nil)
-                                         &allow-other-keys)
+(elfeed-tube--defcallback elfeed-tube--handle-retries
+  (data entry db-insert-p attempts)
+  (when elfeed-tube--debug (message "Attempts: %s" attempts))
+  (if elfeed-tube--invidious-servers
+      (elfeed-tube--fetch-alternate entry db-insert-p (- attempts 1))
+    (elfeed-tube--get-invidious-servers
+     :success #'elfeed-tube--set-invidious-servers-and-fetch
+     :entry entry
+     :db-insert-p db-insert-p
+     :attempts (- attempts 1))))
+
+(elfeed-tube--defcallback elfeed-tube--set-invidious-servers-and-fetch
+  (data entry db-insert-p attempts)
+  (setq elfeed-tube--invidious-servers
+        (thread-last
+          data
+          (cl-remove-if-not (lambda (s) (eq t (plist-get (cadr s) :api))))
+          (mapcar #'car)))
+  (elfeed-tube--fetch-alternate entry db-insert-p (- attempts 1)))
+
+(elfeed-tube--defcallback elfeed-tube--process-info (data entry db-insert-p)
   (cl-assert (or (listp data) (vectorp data)))
-  (let* ((content (elfeed-tube--format-content data))
-         (duration (plist-get data :lengthSeconds))
-         (settings (request-response-settings response))
-         (entry (plist-get settings :entry))
-         (db-insert-p (plist-get settings :db-insert-p)))
+  (let ((content (elfeed-tube--format-content data))
+        (duration (plist-get data :lengthSeconds)))
     (cl-assert (elfeed-entry-p entry))
     (cl-assert (stringp content))
     
     (when elfeed-tube-add-duration
       (setf (elfeed-meta entry :duration) duration))
     
-    (if (xor (equal db-insert-p '(4)) elfeed-tube-always-add-to-db)
-        (progn (setf (elfeed-entry-content-type entry) 'html)
-               (setf (elfeed-entry-content entry) (elfeed-ref content))
-               (when (eq elfeed-show-entry entry) (elfeed-show-refresh)))
+    (if (equal db-insert-p '(4))
+        (progn (elfeed-tube--write-db entry content)
+               (when (eq elfeed-show-entry entry)
+                 (elfeed-show-refresh)))
       (elfeed-tube--hash-content entry content)
       (when (derived-mode-p 'elfeed-show-mode)
-        (elfeed-tube-show-info)))))
+        (elfeed-tube-show)))))
+
+(defun elfeed-tube--write-db (entry content)
+  (setf (elfeed-entry-content-type entry) 'html)
+  (setf (elfeed-entry-content entry) (elfeed-ref content)))
 
 (cl-defun elfeed-tube--hash-content (entry content)
-  (cl-assert (elfeed-entry-p entry))
   (cl-assert (stringp content))
   (let ((video-id (elfeed-tube--get-video-id entry)))
     (puthash video-id content elfeed-tube--info-table)))
 
-(defun elfeed-tube-show-info ()
+(defun elfeed-tube--format-content (api-data)
+  (let* ((duration-seconds (plist-get api-data :lengthSeconds))
+         (duration-minutes (format "%d:%02d"
+                                   (floor duration-seconds 60)
+                                   (mod   duration-seconds 60)))
+         (thumbnail-alist '((large . 2)
+                            (medium . 3)
+                            (small . 4)))
+         (thumbnail-size (cdr-safe (assoc elfeed-tube-thumbnail-size
+                                          thumbnail-alist)))
+         thumbnail-html)
+    (setq thumbnail-html
+          (if thumbnail-size
+              (concat "<img src=\""
+                      (thread-first
+                        (plist-get api-data :videoThumbnails)
+                        (aref thumbnail-size)
+                        (plist-get :url))
+                      "\"></a><br><br>")
+            ""))
+    (concat thumbnail-html
+            ;; "<br><p><strong>Duration: " duration-minutes "</strong></p>"
+            (replace-regexp-in-string
+             "\n" "<br>"
+             (plist-get api-data :descriptionHtml)))))
+
+(cl-defun elfeed-tube--get-invidious-servers (&key (attempts nil)
+                                                   (success nil)
+                                                   (entry nil)
+                                                   (db-insert-p nil)
+                                                   &allow-other-keys)
+  (request "https://api.invidious.io/instances.json"
+    :params '(("pretty" . 1)
+              ("sort_by" . "type,users"))
+    :parser (lambda ()
+              (let ((json-object-type (quote plist))
+                    (json-array-type (quote list)))
+                (json-read)))
+    :success (or success #'elfeed-tube--set-invidious-servers)
+    :error #'ignore
+    :entry entry
+    :db-insert-p db-insert-p
+    :attempts attempts))
+
+(elfeed-tube--defcallback elfeed-tube--set-invidious-servers (data)
+  (setq elfeed-tube--invidious-servers
+        (thread-last
+          data
+          (cl-remove-if-not (lambda (s) (eq t (plist-get (cadr s) :api))))
+          (mapcar #'car))))
+
+(defun elfeed-tube-show ()
   (interactive)
   (when-let* ((_ (and (derived-mode-p 'elfeed-show-mode)
                      (hash-table-p elfeed-tube--info-table)))
@@ -155,30 +270,34 @@ In either case, a double prefix argument will force the fetching of information 
         (elfeed-insert-html content base)))
     (goto-char (point-min))))
 
-(defun elfeed-tube--format-content (api-data)
-  (let* ((duration-seconds (plist-get api-data :lengthSeconds))
-         (duration-minutes (format "%d:%02d"
-                                   (floor duration-seconds 60)
-                                   (mod   duration-seconds 60)))
-         (thumbnail-alist '((large . 2)
-                            (medium . 3)
-                            (small . 4)))
-         (thumbnail-size (cdr-safe (assoc elfeed-tube-thumbnail-size
-                                          thumbnail-alist)))
-         thumbnail-html)
-    (setq thumbnail-html
-          (if thumbnail-size
-              (concat "<a href=\""
-                      (elfeed-entry-link entry)
-                      "\"><img src=\""
-                      (thread-first
-                        (plist-get api-data :videoThumbnails)
-                        (aref thumbnail-size)
-                        (plist-get :url))
-                      "\"></a><br><br>")
-            ""))
-    (concat thumbnail-html
-            ;; "<br><p><strong>Duration: " duration-minutes "</strong></p>"
-            (replace-regexp-in-string
-             "\n" "<br>"
-             (plist-get api-data :descriptionHtml)))))
+(defun elfeed-tube-fetch (entry &optional db-insert-p)
+  "Fetch video information for the current Elfeed ENTRY or ENTRY at point.
+
+With an active region in `elfeed-search-mode', fetch video
+information for all selected entries.
+
+The fetched information is cached for this Emacs session only. To add this information to the Elfeed database, call this command with prefix argument DB-INSERT-P.
+
+To refetch this data from the Internet, call this command with double prefix argument DB-INSERT-P."
+  (interactive (list (pcase major-mode
+                       ('elfeed-search-mode
+                        (elfeed-search-selected))
+                       ('elfeed-show-mode elfeed-show-entry))
+                     current-prefix-arg))
+  
+  (dolist (e (or (and (listp entry) entry)
+                 (list entry)))
+    (if  (elfeed-tube--youtube-p e)
+        (progn (elfeed-tube--fetch-maybe e db-insert-p)
+               (sleep-for 0.2))
+      (message "Not a Youtube video: '%s'" (elfeed-entry-title e)))))
+
+(defun elfeed-tube-setup (&optional db-insert-p)
+  (advice-add elfeed-show-refresh-function :after #'elfeed-tube-show)
+  (when db-insert-p
+    (add-hook 'elfeed-new-entry-hook
+              (defun elfeed-tube--db-insert (entry)
+                (elfeed-tube--fetch-maybe entry '(4))))))
+
+(provide 'elfeed-tube)
+;;; elfeed-tube.el ends here
