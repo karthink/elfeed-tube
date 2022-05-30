@@ -58,9 +58,16 @@ string, for example \"https://invidio.us\". "
   :type '(choice (string :tag "Custom URL")
                  (const :tag "Disabled (Auto)" nil)))
 
+(defcustom elfeed-tube-youtube-regexps '("youtube\\.com" "youtu\\.be")
+  "List of regular expressions to match Elfeed entry URLs against.
+
+Only entries that match one of these regexps will be handled by
+elfeed-tube when fetching information."
+  :group 'elfeed-tube
+  :type '(repeat string))
+
 (defvar elfeed-tube--debug t)
 (defvar elfeed-tube-add-duration t)
-(defvar elfeed-tube-invidious-url "https://vid.puffyan.us")
 (defvar elfeed-tube--api-videos-path "/api/v1/videos/")
 (defvar elfeed-tube--info-table (make-hash-table :test #'equal))
 (defvar elfeed-tube--invidious-servers nil)
@@ -84,14 +91,14 @@ function."
                       (or (cdr-safe args) '(symbol-status))))
        ,@body)))
 
-(defun elfeed-tube--keywordize (s)
+(defsubst elfeed-tube--keywordize (s)
   (intern (concat ":" (symbol-name s))))
 
 (defun elfeed-tube--youtube-p (entry)
-  (string-match-p "youtube\\.com" (elfeed-entry-link entry)))
+  (cl-some (lambda (regex) (string-match-p regex (elfeed-entry-link entry)))
+           elfeed-tube-youtube-regexps))
 
-(defun elfeed-tube--get-video-id (entry)
-  (cl-assert (elfeed-entry-p entry))
+(defsubst elfeed-tube--get-video-id (entry)
   (when (elfeed-tube--youtube-p entry)
     (thread-first (elfeed-entry-id entry)
                   cdr-safe
@@ -119,16 +126,17 @@ function."
         (elfeed-tube--write-db entry content)
         (message "Updated the database for '%s'" (elfeed-entry-title entry)))
        ((and content (not (equal db-insert-p '(16))))
-        (message
-         "Info for entry already fetched. Press 'C-u C-u %s' to force refresh."
-         (this-command-keys))
+        ;; (message
+        ;;  "Info for entry already fetched. Press 'C-u C-u %s' to force refresh."
+        ;;  (this-command-keys))
         (elfeed-tube-show))
        ((> attempts 0)
         (when elfeed-tube--debug
           (message "Attempting to access %s" api-url))
         (request api-url
         :type "GET"
-        :params '(("fields" . "videoThumbnails,descriptionHtml,lengthSeconds"))
+        :params
+        '(("fields" . "videoThumbnails,descriptionHtml,lengthSeconds"))
         :parser (lambda ()
                   (let ((json-object-type (quote plist)))
                     (json-read)))
@@ -137,7 +145,7 @@ function."
         :db-insert-p db-insert-p
         :success #'elfeed-tube--process-info
         :error #'elfeed-tube--handle-retries)
-      (message "Fetching info for video '%s'" (elfeed-entry-title entry)))
+        (when elfeed-tube--debug (message "Fetching info for video '%s'" (elfeed-entry-title entry))))
        (t (message "Could not fetch info for video '%s'" (elfeed-entry-title entry)))))))
 
 (defun elfeed-tube--fetch-alternate (entry &optional db-insert-p attempts)
@@ -167,7 +175,8 @@ function."
           (mapcar #'car)))
   (elfeed-tube--fetch-alternate entry db-insert-p (- attempts 1)))
 
-(elfeed-tube--defcallback elfeed-tube--process-info (data entry db-insert-p)
+(elfeed-tube--defcallback elfeed-tube--process-info
+  (data entry db-insert-p)
   (cl-assert (or (listp data) (vectorp data)))
   (let ((content (elfeed-tube--format-content data))
         (duration (plist-get data :lengthSeconds)))
@@ -246,6 +255,7 @@ function."
           (mapcar #'car))))
 
 (defun elfeed-tube-show ()
+  "Show fetched video information in an elfeed-show buffer."
   (interactive)
   (when-let* ((_ (and (derived-mode-p 'elfeed-show-mode)
                      (hash-table-p elfeed-tube--info-table)))
@@ -270,34 +280,44 @@ function."
         (elfeed-insert-html content base)))
     (goto-char (point-min))))
 
-(defun elfeed-tube-fetch (entry &optional db-insert-p)
-  "Fetch video information for the current Elfeed ENTRY or ENTRY at point.
+(defun elfeed-tube-fetch (entries &optional db-insert-p)
+  "Fetch video information for the current Elfeed ENTRIES or entry at point.
 
 With an active region in `elfeed-search-mode', fetch video
 information for all selected entries.
 
-The fetched information is cached for this Emacs session only. To add this information to the Elfeed database, call this command with prefix argument DB-INSERT-P.
+The fetched information is cached for this Emacs session only. To
+add this information to the Elfeed database, call this command
+with prefix argument DB-INSERT-P.
 
-To refetch this data from the Internet, call this command with double prefix argument DB-INSERT-P."
+To refetch this data from the Internet, call this command with
+double prefix argument DB-INSERT-P."
   (interactive (list (pcase major-mode
                        ('elfeed-search-mode
                         (elfeed-search-selected))
                        ('elfeed-show-mode elfeed-show-entry))
                      current-prefix-arg))
   
-  (dolist (e (or (and (listp entry) entry)
-                 (list entry)))
-    (if  (elfeed-tube--youtube-p e)
-        (progn (elfeed-tube--fetch-maybe e db-insert-p)
-               (sleep-for 0.2))
-      (message "Not a Youtube video: '%s'" (elfeed-entry-title e)))))
+  (dolist (entry (or (and (listp entries) entries)
+                 (list entries)))
+    (if  (elfeed-tube--youtube-p entry)
+        (progn (elfeed-tube--fetch-maybe entry db-insert-p)
+               (if (cdr-safe entries) (sleep-for 0.2)))
+      (message "Not a Youtube video: '%s'" (elfeed-entry-title entry)))))
 
 (defun elfeed-tube-setup (&optional db-insert-p)
-  (advice-add elfeed-show-refresh-function :after #'elfeed-tube-show)
-  (when db-insert-p
-    (add-hook 'elfeed-new-entry-hook
-              (defun elfeed-tube--db-insert (entry)
-                (elfeed-tube--fetch-maybe entry '(4))))))
+  (advice-add elfeed-show-refresh-function :after
+              (defun elfeed-tube--fetch-setup ()
+                (elfeed-tube-fetch elfeed-show-entry
+                                   (when db-insert-p '(4)))))
+  (add-hook 'elfeed-new-entry-hook
+            (defun elfeed-tube--db-setup (entry)
+              (elfeed-tube--fetch-maybe entry
+                                        (when db-insert-p '(4))))))
+
+(defun elfeed-tube-teardown ()
+  (advice-remove elfeed-show-refresh-function #'elfeed-tube--fetch-setup)
+  (remove-hook 'elfeed-new-entry-hook #'elfeed-tube--db-setup))
 
 (provide 'elfeed-tube)
 ;;; elfeed-tube.el ends here
