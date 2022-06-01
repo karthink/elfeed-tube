@@ -89,26 +89,22 @@ Example: (\"tr\" \"english\" \"arabic\" \"es\")
             (elfeed-tube--message (plist-get response :error-message))
             (elfeed-tube--message (format "Fetching caption failed with %d" status-code))))))))
 
-(aio-defun elfeed-tube-captions--fetch (entry &optional force-fetch) 
-  (if-let* ((_ (not (equal force-fetch '(16))))
-            (data-item (elfeed-tube--gethash entry))
-            (caption (elfeed-tube-item-caption data-item)))
-      caption
-    (when-let* ((urls (aio-await (elfeed-tube-captions--fetch-tracks entry)))
-                (xmlcaps (aio-await (elfeed-tube-captions--fetch-url urls))))
-      (with-temp-buffer
-        (insert xmlcaps)
-        (goto-char (point-min))
-        (dolist (reps '(("&amp;#39;"  . "'")
-                        ("&amp;quot;" . "\"")
-                        ("\n"         . " ")
-                        (" "          . "")))
-          (save-excursion
-            (while (search-forward (car reps) nil t)
-              (replace-match (cdr reps) nil t))))
-        (libxml-parse-xml-region (point-min) (point-max))))))
+(aio-defun elfeed-tube-captions--fetch (entry) 
+  (when-let* ((urls (aio-await (elfeed-tube-captions--fetch-tracks entry)))
+              (xmlcaps (aio-await (elfeed-tube-captions--fetch-url urls))))
+    (with-temp-buffer
+      (insert xmlcaps)
+      (goto-char (point-min))
+      (dolist (reps '(("&amp;#39;"  . "'")
+                      ("&amp;quot;" . "\"")
+                      ("\n"         . " ")
+                      (" "          . "")))
+        (save-excursion
+          (while (search-forward (car reps) nil t)
+            (replace-match (cdr reps) nil t))))
+      (libxml-parse-xml-region (point-min) (point-max)))))
 
-(defun elfeed-tube-captions--show (caption)
+(defun elfeed-tube--insert-captions (caption)
   (if  (and (listp caption)
             (eq (car-safe caption) 'transcript))
       (let ((caption-ordered 
@@ -125,7 +121,7 @@ Example: (\"tr\" \"english\" \"arabic\" \"es\")
                       finally return (nconc result (list (list pstart time para)))))
             (inhibit-read-only t))
         (goto-char (point-max))
-        (insert (propertize "\n\nTranscript:\n\n"
+        (insert (propertize "\nTranscript:\n\n"
                             'face 'message-header-name))
         (cl-loop for (start end para) in caption-ordered
                  with beg = (point) do

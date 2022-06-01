@@ -117,7 +117,11 @@ elfeed-tube when fetching information."
 (defsubst elfeed-tube--timestamp (time)
   (format "%d:%02d" (floor time 60) (mod time 60)))
 
-(defmacro elfeed-tube-debug (type &rest body)
+(defsubst elfeed-tube--same-entry-p (entry1 entry2)
+  (equal (elfeed-entry-id entry1)
+         (elfeed-entry-id entry2)))
+
+(defmacro elfeed-tube--debug (type &rest body)
   (declare (indent defun))
   `(let ((entry (pcase ,type
                   ('show (buffer-local-value
@@ -131,14 +135,14 @@ elfeed-tube when fetching information."
      ,@body))
 
 ;; Data structure
-(cl-defstruct (elfeed-tube-item (:constructor elfeed-tube-item--create)
-                                (:copier nil))
-"test"
-length thumb desc caption)
+(cl-defstruct
+    (elfeed-tube-item (:constructor elfeed-tube-item--create)
+                      (:copier nil))
+  "Struct to hold elfeed-tube metadata."
+  length thumb desc caption error)
 
-(cl-defun elfeed-tube-item-create (api-data)
+(defun elfeed-tube--parse-desc (api-data)
   "test"
-  (cl-assert (listp api-data))
   (let* ((length-seconds (plist-get api-data :lengthSeconds))
          (desc-html (replace-regexp-in-string
                      "\n" "<br>"
@@ -152,33 +156,31 @@ length thumb desc caption)
     (when (and elfeed-tube-thumbnail-p
                thumb-size)
       (setq thumb (thread-first
-                  (plist-get api-data :videoThumbnails)
-                  (aref thumb-size)
-                  (plist-get :url))))
-    (elfeed-tube-item--create :length length-seconds
-                              :thumb thumb
-                              :desc desc-html)))
+                    (plist-get api-data :videoThumbnails)
+                    (aref thumb-size)
+                    (plist-get :url))))
+    `(:length ,length-seconds :thumb ,thumb :desc ,desc-html)))
 
 ;; Persistence
 (defun elfeed-tube--write-db (entry &optional data-item)
   (cl-assert (elfeed-entry-p entry))
   (when-let* ((data-item (or data-item (elfeed-tube--gethash entry))))
-    (setf (elfeed-entry-content-type entry) 'html
-
-          (elfeed-meta entry :duration)
-          (elfeed-tube-item-length data-item)
-
-          (elfeed-meta entry :thumbnail)
-          (elfeed-tube-item-thumb data-item)
-
-          (elfeed-entry-content entry)
-          (when-let ((desc (elfeed-tube-item-desc data-item)))
-            (elfeed-ref desc))
-
-          (elfeed-meta entry :caption)
-          (when-let ((caption (elfeed-tube-item-caption data-item))
-                     (elfeed-db-directory elfeed-tube-captions-db-directory))
-            (elfeed-ref (prin1-to-string caption))))
+    (when elfeed-tube-description-p 
+      (setf (elfeed-entry-content-type entry) 'html)
+      (setf (elfeed-meta entry :duration)
+            (elfeed-tube-item-length data-item))
+      (setf (elfeed-entry-content entry)
+            (when-let ((desc (elfeed-tube-item-desc data-item)))
+              (elfeed-ref desc))))
+    (when elfeed-tube-thumbnail-p 
+      (setf (elfeed-meta entry :thumbnail)
+            (elfeed-tube-item-thumb data-item)))
+    (when elfeed-tube-captions-p
+      (setf (elfeed-meta entry :caption)
+            (when-let ((caption (elfeed-tube-item-caption data-item))
+                       (elfeed-db-directory
+                        elfeed-tube-captions-db-directory))
+              (elfeed-ref (prin1-to-string caption)))))
     t))
 
 (defun elfeed-tube--gethash (entry)
@@ -190,84 +192,108 @@ length thumb desc caption)
   (cl-assert (elfeed-entry-p entry))
   (cl-assert (elfeed-tube-item-p data-item))
   (when-let* ((video-id (elfeed-tube--get-video-id entry))
-              (_ (or (equal force '(16))
+              (_ (or force
                      (not (gethash video-id elfeed-tube--info-table)))))
     ;; (elfeed-tube--message
     ;;  (format "putting %s with data %S" video-id data-item))
     (puthash video-id data-item elfeed-tube--info-table)))
 
 ;; Content display
-(defun elfeed-tube-show ()
+(defun elfeed-tube-show (&optional intended-entry)
   "Show extra video information in an elfeed-show buffer."
-  (when (derived-mode-p 'elfeed-show-mode)
-    (if-let* ((entry elfeed-show-entry)
-              (data-item (elfeed-tube--gethash entry)))
-        ;; Load from cache, not db
-        (progn
-          (elfeed-tube--show-insert-duration entry
-                                             (elfeed-tube-item-length data-item))
-          (let* ((inhibit-read-only t)
-                 (feed (elfeed-entry-feed elfeed-show-entry))
-                 (base (and feed (elfeed-compute-base (elfeed-feed-url feed)))))
-            (open-next-line 1)
-            (kill-region (point) (point-max))
-            (elfeed-insert-html (elfeed-tube--show-content data-item) base)
-            (when elfeed-tube-captions-p
-              (elfeed-tube-captions--show (elfeed-tube-item-caption data-item)))))
-      ;; not in cache, load from db with duration
-      (when-let* ((entry elfeed-show-entry)
-                  (duration (elfeed-meta elfeed-show-entry :duration))
-                  (inhibit-read-only t))
-        (elfeed-tube--show-insert-duration entry duration)
-        
-        (when-let ((_ elfeed-tube-thumbnail-p)
-                   (thumb (elfeed-meta elfeed-show-entry :thumbnail)))
-          (goto-char (point-max))
-          (text-property-search-backward 'face 'message-header-name)
-          (forward-line 2)
-          (elfeed-insert-html (elfeed-tube--show-thumbnail thumb)))
-        
-        (when-let* ((_ elfeed-tube-captions-p)
-                    (elfeed-db-directory elfeed-tube-captions-db-directory)
-                    (capstr (elfeed-deref
-                             (elfeed-meta elfeed-show-entry :caption)))
-                    (caption (read capstr)))
-          (elfeed-tube-captions--show caption))))
-    (goto-char (point-min))))
+  (when-let* ((show-buf (get-buffer "*elfeed-entry*"))
+              (entry (buffer-local-value 'elfeed-show-entry show-buf))
+              (intended-entry (or intended-entry entry)))
+    (when (elfeed-tube--same-entry-p entry intended-entry)
+      (with-current-buffer show-buf
+        (if-let* ((data-item (elfeed-tube--gethash entry)))
+            ;; Load from cache, not db
+            (progn
+              (let* ((inhibit-read-only t)
+                     (feed (elfeed-entry-feed elfeed-show-entry))
+                     (base (and feed (elfeed-compute-base (elfeed-feed-url feed)))))
+                (goto-char (point-max))
+                (when (text-property-search-backward
+                       'face 'message-header-name)
+                  (beginning-of-line))
+                (elfeed-tube--insert-duration
+                 entry (elfeed-tube-item-length data-item))
+                (if (or (and (elfeed-tube-item-desc data-item)
+                             (not (elfeed-entry-content entry)))
+                        (and (elfeed-tube-item-thumb data-item)
+                             (not (elfeed-meta entry :thumbnail)))
+                        (and (elfeed-tube-item-caption data-item)
+                             (not (elfeed-meta entry :caption))))
+                    (insert (propertize "[*NOT SAVED*]\n"
+                                        'face
+                                        '(:inherit message-cited-text-2
+                                          :weight bold))))
+                
+                (when (or (elfeed-tube-item-thumb data-item)
+                          (elfeed-tube-item-desc data-item)
+                          (elfeed-tube-item-caption data-item))
+                  (kill-region (point) (point-max))
+                  (open-next-line 1))
+                
+                (elfeed-insert-html (elfeed-tube--show-desc data-item) base)
+                (when elfeed-tube-captions-p
+                  (elfeed-tube--insert-captions (elfeed-tube-item-caption data-item)))))
+          ;; not in cache, load from db with duration
+          (when-let* ((entry elfeed-show-entry)
+                      (duration (elfeed-meta elfeed-show-entry :duration))
+                      (inhibit-read-only t))
+            (elfeed-tube--insert-duration entry duration)
+            
+            (when-let ((_ elfeed-tube-thumbnail-p)
+                       (thumb (elfeed-meta elfeed-show-entry :thumbnail)))
+              (goto-char (point-max))
+              (text-property-search-backward 'face 'message-header-name)
+              (forward-line 2)
+              (elfeed-insert-html (elfeed-tube--show-thumbnail thumb)))
+            
+            (when-let* ((_ elfeed-tube-captions-p)
+                        (elfeed-db-directory elfeed-tube-captions-db-directory)
+                        (capstr (elfeed-deref
+                                 (elfeed-meta elfeed-show-entry :caption)))
+                        (caption (read capstr)))
+              (elfeed-tube--insert-captions caption))))
+        (goto-char (point-min))))))
 
-(defun elfeed-tube--show-insert-duration (entry duration)
+(defun elfeed-tube--insert-duration (entry duration)
   (if (not (integerp duration))
-      (elfeed-tube--message "Duration not available for video")
+      (elfeed-tube--message
+       (format "Duration not available for video \"%s\""
+               (elfeed-entry-title entry)))
     (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (when (text-property-search-backward 'face 'message-header-name)
-          (beginning-of-line)
-          (when (looking-at "Duration:") (kill-whole-line))
-          (when (equal entry elfeed-show-entry)
-            (open-next-line 1)
-            (insert (propertize "Duration: " 'face 'message-header-name)
-                    (propertize (elfeed-tube--timestamp duration)
-                                'face 'message-header-other)
-                    "\n"))))))
+      (beginning-of-line)
+      (if (looking-at "Duration:")
+          (delete-region (point)
+                         (save-excursion (end-of-line)
+                                         (point)))
+        (open-next-line 1))
+      (insert (propertize "Duration: " 'face 'message-header-name)
+              (propertize (elfeed-tube--timestamp duration)
+                          'face 'message-header-other)
+              "\n")
+      t)))
 
-(defun elfeed-tube--show-content (data-item)
+(defun elfeed-tube--show-desc (data-item)
   (cl-assert (elfeed-tube-item-p data-item))
-  (let ((content  (elfeed-tube-item-desc data-item))
+  (let ((desc     (elfeed-tube-item-desc data-item))
         (duration (elfeed-tube-item-length data-item))
         (thumb    (elfeed-tube-item-thumb data-item)))
     (concat
      (when elfeed-tube-thumbnail-p
        (elfeed-tube--show-thumbnail thumb))
-     content
-     (when elfeed-tube-comments-p))))
+     (when elfeed-tube-description-p desc))))
 
 ;; Setup
 (defun elfeed-tube-setup (&optional db-insert-p)
   (defun elfeed-tube--auto-fetch (&optional entry)
-    (elfeed-tube-fetch-1 (or entry elfeed-show-entry)
-                         (when (or db-insert-p
-                                   elfeed-tube-save-to-db-p)
-                           '(4))))
+    (elfeed-tube--fetch-1 (or entry elfeed-show-entry)
+                          (when (or db-insert-p
+                                    elfeed-tube-save-to-db-p)
+                            '(4))))
   (advice-add elfeed-show-refresh-function :after #'elfeed-tube--auto-fetch)
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
   t)
@@ -305,7 +331,7 @@ The result is a plist with the following keys:
 ;; Fetchers
 (aio-defun elfeed-tube--get-invidious-servers ()
   (let* ((instances-url (concat "https://api.invidious.io/instances.json"
-                               "?pretty=1&sort_by=type,users"))
+                                "?pretty=1&sort_by=type,users"))
          (result (aio-await (elfeed-tube-curl-enqueue instances-url :method "GET")))
          (status-code (plist-get result :status-code))
          (servers (plist-get result :content)))
@@ -322,88 +348,106 @@ The result is a plist with the following keys:
                                (aio-await (elfeed-tube--get-invidious-servers))))))
         (elfeed-tube--random-elt servers))))
 
-(aio-defun elfeed-tube--fetch-maybe (entry &optional force-fetch attempts)
-  (when-let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
-              (video-id (elfeed-tube--get-video-id entry)))
-    (let ((data-item (elfeed-tube--gethash entry)))
-      (cond
-       ((and data-item (not (equal force-fetch '(16)))) data-item)
-       ((and (> attempts 0)
-             (or (equal force-fetch '(16))
-                 (not (elfeed-entry-content entry))))
-        (if-let ((invidious-url (aio-await (elfeed-tube--get-invidious-url))))
-            (let* ((api-url (concat
-                             invidious-url
-                             elfeed-tube--api-videos-path
-                             video-id
-                             "?fields="
-                             (string-join elfeed-tube--api-video-fields ",")))
-                   (api-response (aio-await (elfeed-tube-curl-enqueue
+(aio-defun elfeed-tube--fetch-desc (entry &optional attempts)
+  (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
+         (video-id (elfeed-tube--get-video-id entry)))
+    (when (> attempts 0)
+      (if-let ((invidious-url (aio-await (elfeed-tube--get-invidious-url))))
+          (let* ((api-url (concat
+                           invidious-url
+                           elfeed-tube--api-videos-path
+                           video-id
+                           "?fields="
+                           (string-join elfeed-tube--api-video-fields ",")))
+                 (api-response (aio-await (elfeed-tube-curl-enqueue
                                            api-url
                                            :method "GET")))
-                   (api-status (plist-get api-response :status-code))
-                   (api-data (plist-get api-response :content))
-                   (json-object-type (quote plist)))
-              (if (= api-status 200)
-                  ;; Return data
-                  (condition-case error
-                      ;; (with-current-buffer "*scratch*"
-                      ;;   (erase-buffer)
-                      ;;   ;; (insert api-url "\n")
-                      ;;   (insert api-data))
-                      (elfeed-tube-item-create
-                       (json-parse-string api-data :object-type 'plist))
-                    ('json-parse-error
-                     (elfeed-tube--message "Malformed data, retrying fetch"
-                                           attempts)
-                     (aio-await
-                      (elfeed-tube--fetch-maybe entry force-fetch (- attempts 1)))))
-                ;; Retry #attempts times
-                (elfeed-tube--message
-                 (format "Retrying fetch for %s" (elfeed-entry-title entry))
-                 attempts)
-                (aio-await
-                 (elfeed-tube--fetch-maybe entry force-fetch (- attempts 1)))))
+                 (api-status (plist-get api-response :status-code))
+                 (api-data (plist-get api-response :content))
+                 (json-object-type (quote plist)))
+            (if (= api-status 200)
+                ;; Return data
+                (condition-case error
+                    (prog1
+                        (elfeed-tube--parse-desc
+                         (json-parse-string api-data :object-type 'plist)))
+                  ('json-parse-error
+                   (elfeed-tube--message "Malformed data, retrying fetch"
+                                         attempts)
+                   (aio-await
+                    (elfeed-tube--fetch-desc entry (- attempts 1)))))
+              ;; Retry #attempts times
+              (elfeed-tube--message
+               (format "Fetch failed with code %d, retrying fetch for \"%s\""
+                       api-status
+                       (elfeed-entry-title entry))
+               attempts)
+              (aio-await
+               (elfeed-tube--fetch-desc entry (- attempts 1)))))
 
-          (message
-           "Could not find a valid Invidious url. Please cusomize `elfeed-tube-invidious-url'.")
-          nil))))))
+        (message
+         "Could not find a valid Invidious url. Please cusomize `elfeed-tube-invidious-url'.")
+        nil))))
 
-(aio-defun elfeed-tube-fetch-1 (entry &optional db-insert-p)
-  (when-let ((_ (elfeed-tube--youtube-p entry))
-             (data-item (aio-await      ;Thumbnail and description
-                         (elfeed-tube--fetch-maybe entry db-insert-p))))
-    ;; Captions
-    (when elfeed-tube-captions-p
-      (when-let ((caption (aio-await (elfeed-tube-captions--fetch entry db-insert-p))))
-        (setf (elfeed-tube-item-caption data-item) caption)))
-    
-    ;; Comments
-    ;; (when elfeed-tube-comments-p
-    ;;   (when-let ((caption (aio-await (elfeed-tube-comments--fetch entry))))
-    ;;     (setf (elfeed-tube-item-comments data-item) caption)))
-    
-    (if (or (equal db-insert-p '(4)) elfeed-tube-save-to-db-p)
-        (progn (elfeed-tube--write-db entry data-item)
-               (when (eq entry elfeed-show-entry)
-                 (elfeed-show-refresh))
-               (elfeed-tube--message
-                (format "Saved to elfeed-db: %s"
-                        (elfeed-entry-title entry))))
-      (elfeed-tube--puthash entry data-item db-insert-p)
-      (when (and (derived-mode-p 'elfeed-show-mode)
-                 (equal (elfeed-entry-id entry)
-                        (elfeed-entry-id elfeed-show-entry)))
-        (elfeed-tube-show)))))
+(aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
+  (when (elfeed-tube--youtube-p entry)
+    (let* ((existing (elfeed-tube--gethash entry))
+           (data-item (or existing
+                          (elfeed-tube-item--create))))
+      
+      ;; Record description
+      (when (and (or elfeed-tube-thumbnail-p elfeed-tube-description-p)
+                 (or force-fetch
+                     (not (or existing
+                              (elfeed-entry-content entry)))))
+        (if-let ((api-data
+                  (aio-await (elfeed-tube--fetch-desc entry))))
+            (progn
+              (when elfeed-tube-thumbnail-p
+                (setf (elfeed-tube-item-thumb data-item)
+                      (plist-get api-data :thumb)))
+              (when elfeed-tube-description-p
+                (setf (elfeed-tube-item-length data-item)
+                      (plist-get api-data :length))
+                (setf (elfeed-tube-item-desc data-item)
+                      (plist-get api-data :desc))))
+          (push 'desc (elfeed-tube-item-error data-item))))
+      
+      ;; Record captions
+      (when (and elfeed-tube-captions-p
+                 (or force-fetch
+                     (not (or existing
+                              (elfeed-ref-p
+                               (elfeed-meta entry :caption))))))
+        (if-let ((caption (aio-await (elfeed-tube-captions--fetch entry))))
+            (setf (elfeed-tube-item-caption data-item) caption)
+          (push 'caption (elfeed-tube-item-error data-item))))
+      
+      (if elfeed-tube-save-to-db-p
+          ;; Store in db
+          (progn (elfeed-tube--write-db entry data-item)
+                 (when (elfeed-tube--same-entry-p
+                        entry elfeed-show-entry)
+                   (elfeed-show-refresh))
+                 (elfeed-tube--message
+                  (format "Saved to elfeed-db: %s"
+                          (elfeed-entry-title entry))))
+        ;; Store in session cache
+        (elfeed-tube--puthash entry data-item force-fetch)
+        (elfeed-tube-show entry)))))
 
 ;; Entry points
 ;;;autoload(autoload 'elfeed-tube-fetch "elfeed-tube" "Fetch youtube metadata for Elfeed entries." t nil)
-(aio-defun elfeed-tube-fetch (entries &optional db-insert-p)
+(aio-defun elfeed-tube-fetch (entries &optional force-fetch)
   "Fetch youtube metadata for Elfeed ENTRIES.
 
-With optional prefix argument DB-INSERT-P, write this metadaata
-to the Elfeed database. With double prefix arg DB-INSERT-P, force
-refetching of the metadata.
+In elfeed-show buffers, ENTRIES is the entry being displayed.
+
+In elfeed-search buffers, ENTRIES is the entry at point, or all
+entries in the region when the region is active.
+
+With optional prefix argument FORCE-FETCH, force refetching of
+the metadata for ENTRIES.
 
 If you want to always add this metadata to the database, consider
 setting `elfeed-tube-save-to-db-p'. To customize what kinds of
@@ -411,10 +455,14 @@ metadata are fetched, customize TODO
 `elfeed-tube-metadata-types'."
   (interactive (list (elfeed-tube--get-entries)
                      current-prefix-arg))
-  (aio-await
-   (aio-all
-    (cl-loop for entry in (ensure-list entries)
-             collect (elfeed-tube-fetch-1 entry db-insert-p)))))
+  (if (or elfeed-tube-description-p
+          elfeed-tube-captions-p
+          elfeed-tube-thumbnail-p)
+    (aio-await
+     (aio-all
+      (cl-loop for entry in (ensure-list entries)
+               collect (elfeed-tube--fetch-1 entry force-fetch))))
+    (message "Nothing to fetch! Customize `elfeed-tube-metadata-types'.")))
 
 ;;;###autoload
 (defun elfeed-tube-save (entries)
@@ -426,7 +474,9 @@ entries when the region is active."
   (interactive (list (elfeed-tube--get-entries)))
   (dolist (entry entries)
     (if (elfeed-tube--write-db entry)
-        (message "Wrote to elfeed-db: \"%s\"" (elfeed-entry-title entry))
+        (progn (message "Wrote to elfeed-db: \"%s\"" (elfeed-entry-title entry))
+               (when (derived-mode-p 'elfeed-show-mode)
+                 (elfeed-show-refresh)))
       (message "elfeed-db already contains: \"%s\"" (elfeed-entry-title entry)))))
 
 (provide 'elfeed-tube)
