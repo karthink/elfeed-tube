@@ -26,7 +26,11 @@
 (require 'elfeed)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'rx)
 (require 'aio)
+
+(require 'elfeed-tube-utils)
+(require 'elfeed-tube-mpv)
 
 ;; Customizatiion options
 (defgroup elfeed-tube nil
@@ -101,16 +105,33 @@ Example:
   :group 'elfeed-tube
   :type '(repeat string))
 
+(defcustom elfeed-tube-minimal-save-indicator-p nil
+  "Style of indication that entry information is unsaved.
+
+When set to true, elfeed-tube will use a minimal indicator next
+to theb title."
+  :group 'elfeed-tube
+  :type  'boolean)
+(defcustom elfeed-tube-save-to-db-p nil
+  "Save information fetched by elfeed-tube to the Elfeed databse.
+
+This is a boolean. Fetched information is automatically saved
+when this is set to true."
+  :group 'elfeed-tube
+  :type 'boolean)
+
 ;; Internal variables
-(defvar elfeed-tube--debug t)
+;; (defvar elfeed-tube--debug t)
 (defvar elfeed-tube--api-videos-path "/api/v1/videos/")
 (defvar elfeed-tube--info-table (make-hash-table :test #'equal))
 (defvar elfeed-tube--invidious-servers nil)
 (defvar elfeed-tube--sblock-url "https://sponsor.ajay.app")
 (defvar elfeed-tube--sblock-api-path "/api/skipSegments")
-(defvar elfeed-tube-captions-sblock-p t)
-(defvar elfeed-tube-minimal-save-indicator-p nil)
-(defvar elfeed-tube-save-to-db-p nil)
+(defcustom elfeed-tube-captions-sblock-p t
+  "Whether sponsored segments should be de-emphasizes in transcripts."
+  :group 'elfeed-tube
+  :type 'boolean)
+(defvar elfeed-tube-captions-puntcuate-p t)
 (defvar elfeed-tube--api-video-fields
   '("videoThumbnails" "descriptionHtml" "lengthSeconds"))
 (defvar elfeed-tube--max-retries 2)
@@ -123,12 +144,24 @@ Example:
   (mapconcat #'file-name-as-directory
              `(,elfeed-db-directory "elfeed-tube" "comments")
              ""))
-(defvar elfeed-tube--captions-map
+
+(defun elfeed-tube-captions-browse-with (follow-fun)
+  (lambda (event)
+    (interactive "e")
+    (let ((pos (posn-point (event-end event))))
+      (funcall follow-fun pos))))
+
+(defvar elfeed-tube-captions-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [mouse-2] #'elfeed-tube--follow-captions-event)
-    (define-key map (kbd "RET") #'elfeed-tube--follow-captions-link)
-    (define-key map [follow-link] 'mouse-face)
+    (define-key map [mouse-2] (elfeed-tube-captions-browse-with
+                               #'elfeed-tube--browse-at-time))
+    (define-key map (kbd "RET") #'elfeed-tube--browse-at-time)
+    ;; (define-key map [follow-link] 'mouse-face)
     map))
+
+(define-key elfeed-tube-captions-map [mouse-1]
+  (elfeed-tube-captions-browse-with #'elfeed-tube-mpv-play))
+
 (defvar elfeed-tube-caption-faces
   '((text      . variable-pitch)
     (timestamp . (message-header-other :inherit variable-pitch
@@ -137,7 +170,8 @@ Example:
     (outro     . (variable-pitch :inherit shadow))
     (sponsor   . (variable-pitch :inherit shadow
                                  :strike-through t))
-    (selfpromo . (variable-pitch :inherit shadow))))
+    (selfpromo . (variable-pitch :inherit shadow
+                                 :strike-through t))))
 
 ;; Helpers
 (defsubst elfeed-tube-include-p (field)
@@ -235,11 +269,12 @@ Example:
   (when-let* ((data-item (or data-item (elfeed-tube--gethash entry))))
     (when (elfeed-tube-include-p 'description)
       (setf (elfeed-entry-content-type entry) 'html)
-      (setf (elfeed-meta entry :duration)
-            (elfeed-tube-item-length data-item))
       (setf (elfeed-entry-content entry)
             (when-let ((desc (elfeed-tube-item-desc data-item)))
               (elfeed-ref desc))))
+    (when (elfeed-tube-include-p 'duration)
+      (setf (elfeed-meta entry :duration)
+            (elfeed-tube-item-length data-item)))
     (when (elfeed-tube-include-p 'thumbnail)
       (setf (elfeed-meta entry :thumbnail)
             (elfeed-tube-item-thumb data-item)))
@@ -248,6 +283,8 @@ Example:
         (setf (elfeed-meta entry :caption)
               (when-let ((caption (elfeed-tube-item-caption data-item)))
                 (elfeed-ref (prin1-to-string caption))))))
+    (elfeed-tube-log 'info "[DB][Wrote to DB][video:%s]"
+                     (elfeed-tube--truncate (elfeed-entry-title entry)))
     t))
 
 (defun elfeed-tube--gethash (entry)
@@ -342,11 +379,11 @@ Example:
             (forward-line 1))
           
           ;; DB Status
-          (when (or (and (elfeed-tube-item-desc data-item)
+          (when (or (and data-item (elfeed-tube-item-desc data-item)
                          (not (elfeed-entry-content entry)))
-                    (and (elfeed-tube-item-thumb data-item)
+                    (and data-item (elfeed-tube-item-thumb data-item)
                          (not (elfeed-meta entry :thumbnail)))
-                    (and (elfeed-tube-item-caption data-item)
+                    (and data-item (elfeed-tube-item-caption data-item)
                          (not (elfeed-meta entry :caption))))
             (let ((prop-list
                    `(face (:inherit warning :weight bold) mouse-face highlight
@@ -362,7 +399,7 @@ Example:
           ;; Thumbnail
           (when-let ((_ (elfeed-tube-include-p 'thumbnail))
                      (thumb (or (and data-item (elfeed-tube-item-thumb data-item))
-                                (elfeed-meta entry :thumb))))
+                                (elfeed-meta entry :thumbnail))))
             (elfeed-insert-html (elfeed-tube--thumbnail-html thumb)))
           
           ;; Description
@@ -394,7 +431,7 @@ Example:
 (defvar elfeed-tube--save-state-map
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-2] #'elfeed-tube-save)
-    ;; (define-key map (kbd "RET") #'elfeed-tube--follow-captions-link)
+    ;; (define-key map (kbd "RET") #'elfeed-tube--browse-at-time)
     (define-key map [follow-link] 'mouse-face)
     map))
 
@@ -409,7 +446,8 @@ Example:
           (delete-region (point)
                          (save-excursion (end-of-line)
                                          (point)))
-        (open-next-line 1))
+	(end-of-line)
+	(insert "\n"))
       (insert (propertize "Duration: " 'face 'message-header-name)
               (propertize (elfeed-tube--timestamp duration)
                           'face 'message-header-other)
@@ -461,7 +499,7 @@ Example:
                                            'help-echo
                                            #'elfeed-tube--caption-echo
                                            'keymap
-                                           elfeed-tube--captions-map))
+                                           elfeed-tube-captions-map))
                              para)
                      " ")
                     (propertize "\n\n" 'hard t)))
@@ -486,20 +524,30 @@ Example:
             (get-text-property pos 'elfeed-tube-timestamp)))))
 
 ;; Setup
-(defun elfeed-tube-setup (&optional db-insert-p)
+(defun elfeed-tube-setup ()
   (defun elfeed-tube--auto-fetch (&optional entry)
-    (elfeed-tube--fetch-1 (or entry elfeed-show-entry)
-                          (when (or db-insert-p
-                                    elfeed-tube-save-to-db-p)
-                            '(4))))
-  (advice-add elfeed-show-refresh-function :after #'elfeed-tube--auto-fetch)
+    (elfeed-tube--fetch-1 (or entry elfeed-show-entry)))
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
+  (advice-add 'elfeed-show-entry
+              :after #'elfeed-tube--auto-fetch)
+  (advice-add elfeed-show-refresh-function
+              :after #'elfeed-tube-show)
+  t)
+
+(defun elfeed-tube-setup-no-fetch ()
+  "Set up elfeed-tube to show youtube data.
+
+Running this will only show data in the Elfeed database, without
+fetching it from the Internet."
+  (advice-add elfeed-show-refresh-function
+              :after #'elfeed-tube-show)
   t)
 
 ;; (advice-add elfeed-show-refresh-function :after #'elfeed-tube-show)
 
 (defun elfeed-tube-teardown ()
-  (advice-remove elfeed-show-refresh-function #'elfeed-tube--auto-fetch)
+  (advice-remove elfeed-show-refresh-function #'elfeed-tube-show)
+  (advice-remove elfeed-show-entry #'elfeed-tube--auto-fetch)
   (remove-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
   t)
 
@@ -657,7 +705,7 @@ The result is a plist with the following keys:
     (when parsed-caps
       (when (and elfeed-tube-captions-sblock-p sblock)
         (setq parsed-caps (elfeed-tube--sblock-captions sblock parsed-caps))) 
-      (when (and (bound-and-true-p elfeed-tube-captions-puntcuate-p)
+      (when (and elfeed-tube-captions-puntcuate-p
                  (string-match-p "auto-generated" language))
         (elfeed-tube--npreprocess-captions parsed-caps))
       parsed-caps)))
@@ -739,6 +787,11 @@ The result is a plist with the following keys:
                            video-id
                            "?fields="
                            (string-join elfeed-tube--api-video-fields ",")))
+                 (desc-log (elfeed-tube-log
+                            'debug
+                            "[Description][video:%s][Fetch:%s]"
+                            (elfeed-tube--truncate (elfeed-entry-title entry))
+                            api-url))
                  (api-response (aio-await (elfeed-tube-curl-enqueue
                                            api-url
                                            :method "GET")))
@@ -773,9 +826,6 @@ The result is a plist with the following keys:
          "Could not find a valid Invidious url. Please cusomize `elfeed-tube-invidious-url'.")
         nil))))
 
-(defun etl (msg &rest args)
-  (elfeed-tube-log 'debug msg args))
-
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
   (when (elfeed-tube--youtube-p entry)
     (let* ((existing (elfeed-tube--gethash entry))
@@ -783,8 +833,8 @@ The result is a plist with the following keys:
                           (elfeed-tube-item--create))))
       
       ;; Record description
-      (when (and (or (cl-some #'elfeed-tube-include-p
-                              '(duration thumbnail description)))
+      (when (and (cl-some #'elfeed-tube-include-p
+                          '(duration thumbnail description))
                  (or force-fetch
                      (not (or (memq 'desc
                                     (elfeed-tube-item-error data-item))
@@ -826,7 +876,8 @@ The result is a plist with the following keys:
           (progn (elfeed-tube--write-db entry data-item)
                  (when (elfeed-tube--same-entry-p
                         entry elfeed-show-entry)
-                   (elfeed-show-refresh))
+                   ;; (elfeed-show-refresh)
+		   )
                  (elfeed-tube-log
                   'info "Saved to elfeed-db: %s"
                   (elfeed-entry-title entry)))
@@ -838,15 +889,11 @@ The result is a plist with the following keys:
                          elfeed-tube-item-caption
                          elfeed-tube-item-error))
           (elfeed-tube--puthash entry data-item force-fetch))
-        (elfeed-tube-show entry)))))
+        ;; (elfeed-tube-show entry)
+	))))
 
 ;; Interaction
-(defun elfeed-tube--follow-captions-event (event)
-  (interactive "e")
-  (let ((pos (posn-point (event-end event))))
-    (elfeed-tube--follow-captions-link pos)))
-
-(defun elfeed-tube--follow-captions-link (pos)
+(defun elfeed-tube--browse-at-time (pos)
   (interactive "d")
   (when-let ((time (get-text-property pos 'elfeed-tube-timestamp)))
     (browse-url (concat "https://youtube.com/watch?v="
@@ -855,7 +902,6 @@ The result is a plist with the following keys:
                         (number-to-string (floor time))))))
 
 ;; Entry points
-;;;autoload(autoload 'elfeed-tube-fetch "elfeed-tube" "Fetch youtube metadata for Elfeed entries." t nil)
 (aio-defun elfeed-tube-fetch (entries &optional force-fetch)
   "Fetch youtube metadata for Elfeed ENTRIES.
 
@@ -873,14 +919,12 @@ metadata are fetched, customize TODO
 `elfeed-tube-metadata-fields'."
   (interactive (list (elfeed-tube--get-entries)
                      current-prefix-arg))
-  (if elfeed-tube-metadata-fields
-    (aio-await
-     (aio-all
-      (cl-loop for entry in (ensure-list entries)
-               collect (elfeed-tube--fetch-1 entry force-fetch))))
-    (message "Nothing to fetch! Customize `elfeed-tube-metadata-fields'.")))
+  (if (not elfeed-tube-metadata-fields)
+      (message "Nothing to fetch! Customize `elfeed-tube-metadata-fields'.")
+    (dolist (entry (ensure-list entries))
+      (aio-await (elfeed-tube--fetch-1 entry force-fetch))
+      (elfeed-tube-show entry))))
 
-;;;###autoload
 (defun elfeed-tube-save (entries)
   "Save elfeed-tube youtube metadata for ENTRIES to the elfeed database.
 
