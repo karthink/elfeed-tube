@@ -58,7 +58,6 @@ queries."
           #'ignore)
          current-prefix-arg))
   (message "Finding RSS feeds, hold tight!")
-  (prin1 queries (get-buffer "*scratch*"))
   (let ((channels (aio-await (elfeed-tube-add--get-channels queries))))
     (elfeed-tube-add--display-channels channels)))
 
@@ -78,7 +77,8 @@ queries."
                                    "/api/v1/channels/"
                                    chan-id
                                    "?fields=author,authorUrl"))
-                  (data (aio-await (elfeed-tube--aio-fetch api-url)))
+                  (data (aio-await (elfeed-tube--aio-fetch
+                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
                   (author (plist-get data :author))
                   (author-url (plist-get data :authorUrl))
                   (feed (concat channel-base-url chan-id)))
@@ -103,7 +103,8 @@ queries."
                                    "/api/v1/playlists/"
                                    playlist-id
                                    "?fields=title,author"))
-                  (data (aio-await (elfeed-tube--aio-fetch api-url)))
+                  (data (aio-await (elfeed-tube--aio-fetch
+                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
                   (title (plist-get data :title))
                   (author (plist-get data :author))
                   (feed (concat playlist-base-url playlist-id)))
@@ -123,7 +124,8 @@ queries."
                                    videos-url
                                    video-id
                                    "?fields=author,authorUrl,authorId"))
-                  (data (aio-await (elfeed-tube--aio-fetch api-url)))
+                  (data (aio-await (elfeed-tube--aio-fetch
+                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
                   (author (plist-get data :author))
                   (author-id (plist-get data :authorId))
                   (author-url (plist-get data :authorUrl))
@@ -142,7 +144,8 @@ queries."
                                    search-url
                                    "?q=" (url-hexify-string q)
                                    "&type=channel&page=1"))
-                  (data (aio-await (elfeed-tube--aio-fetch api-url)))
+                  (data (aio-await (elfeed-tube--aio-fetch
+                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
                   (chan-1 (and (> (length data) 0)
                                (aref data 0)))
                   (author (plist-get chan-1 :author))
@@ -203,7 +206,8 @@ queries."
             (continue (propertize "C-c C-c" 'face 'help-key-binding))
             (continue-extra (prophelp "C-u C-c C-c"))
             (cancel-q (propertize "q" 'face 'help-key-binding))
-            (cancel (propertize "C-c C-k" 'face 'help-key-binding)))
+            (cancel   (propertize "C-c C-k" 'face 'help-key-binding))
+            (copy     (propertize "C-c C-w" 'face 'help-key-binding)))
         
         (toggle-truncate-lines 1)
         (insert "\n")
@@ -219,14 +223,25 @@ queries."
             "All queries resolved successfully.\n\n"
             'face 'success)
            "     " continue ": Add all feeds to the Elfeed database.\n"
-           " " continue-extra ": Add all feeds, fetch entries from them and open Elfeed.\n"))
-        (insert cancel-q " or " cancel ": Quit and cancel this operation."))
+           " " continue-extra ": Add all feeds, fetch entries from them and open Elfeed.\n"
+           "     " copy ": Copy the list of feed URLs as a list\n"))
+        (insert "\n" cancel-q " or " cancel ": Quit and cancel this operation."))
       
       (goto-char (point-min))
       
-      (let ((window (display-buffer buffer)))
-        ;; (set-window-dedicated-p window t)
-        buffer))))
+      ;; (let ((window (display-buffer buffer)))
+      ;;   ;; (set-window-dedicated-p window t)
+      ;;   buffer)
+      
+      (let ((window
+             (funcall
+              (if (bound-and-true-p demo-mode)
+                  #'switch-to-buffer
+                #'display-buffer)
+              buffer)))
+        buffer)
+      
+      )))
 
 (defun elfeed-tube-add--visit-channel (button)
   (browse-url (button-get button 'help-echo)))
@@ -261,6 +276,22 @@ afterwards."
 
 (define-key elfeed-tube-channels-mode-map (kbd "C-c C-k") #'kill-buffer)
 (define-key elfeed-tube-channels-mode-map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
+(define-key elfeed-tube-channels-mode-map (kbd "C-c C-w") #'elfeed-tube-add--copy)
+
+(defun elfeed-tube-add--copy ()
+  "Copy visible Youtube feeds to the kill ring as a list.
+
+With optional prefix argument ARG, update these feeds and open Elfeed
+afterwards."
+  (interactive)
+  (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
+  (let* ((channels tabulated-list-entries)
+         authors feeds)
+    (cl-loop for channel in channels
+             for (author query feed) = (append (cadr channel) nil)
+             collect feed into feeds
+             finally (kill-new (prin1-to-string feeds)))
+    (message "Feed URLs saved to kill-ring.")))
 
 ;; (defvar elfeed-tube-channels-mode-map
 ;;   (let ((map (make-sparse-keymap)))
@@ -270,7 +301,19 @@ afterwards."
 ;;     ;; (make-composed-keymap (list map) tabulated-list-mode-map)
 ;;     ))
 
-(aio-defun elfeed-tube--aio-fetch (url &optional desc attempts)
+(aio-defun elfeed-tube--aio-fetch (url &optional next desc attempts)
+  "Fetch URL asynchronously using `elfeed-curl-retrieve'.
+
+If successful (HTTP 200), return the JSON-parsed result as a
+plist.
+
+Otherwise, call the function NEXT (with no arguments) and try
+ATTEMPTS more times. Return nil if all attempts fail. DESC is a
+description string to print to the elfeed-tube log allong with
+any other error messages.
+
+This function returns a promise.
+"
   (let ((attempts (or attempts (1+ elfeed-tube--max-retries))))
     (when (> attempts 0)
       (let* ((response
@@ -283,10 +326,16 @@ afterwards."
           (condition-case nil
               (json-parse-string content :object-type 'plist)
             ('(json-parse-error error)
-             (elfeed-tube-log 'error "[Search] JSON malformed (%s)" attempts)
-             (aio-await (elfeed-tube--search-to-chan url desc (1- attempts))))))
-         (t (elfeed-tube-log 'error "[Search][%s]: %s (%s)" error-msg url attempts)
-            (aio-await (elfeed-tube--search-to-chan url desc (1- attempts)))))))))
+             (elfeed-tube-log 'error "[Search] JSON malformed (%s)"
+                              (elfeed-tube--attempt-log attempts))
+             (and (functionp next) (funcall next))
+             (aio-await
+              (elfeed-tube--search-to-chan url next desc (1- attempts))))))
+         (t (elfeed-tube-log 'error "[Search][%s]: %s (%s)" error-msg url
+                             (elfeed-tube--attempt-log attempts))
+            (and (functionp next) (funcall next))
+            (aio-await
+             (elfeed-tube--search-to-chan url next desc (1- attempts)))))))))
 
 (defsubst elfeed-tube--video-p (cand)
   (string-match

@@ -524,9 +524,10 @@ when this is set to true."
             (get-text-property pos 'elfeed-tube-timestamp)))))
 
 ;; Setup
+(defun elfeed-tube--auto-fetch (&optional entry)
+  (elfeed-tube--fetch-1 (or entry elfeed-show-entry)))
+
 (defun elfeed-tube-setup ()
-  (defun elfeed-tube--auto-fetch (&optional entry)
-    (elfeed-tube--fetch-1 (or entry elfeed-show-entry)))
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
   (advice-add 'elfeed-show-entry
               :after #'elfeed-tube--auto-fetch)
@@ -547,7 +548,7 @@ fetching it from the Internet."
 
 (defun elfeed-tube-teardown ()
   (advice-remove elfeed-show-refresh-function #'elfeed-tube-show)
-  (advice-remove elfeed-show-entry #'elfeed-tube--auto-fetch)
+  (advice-remove 'elfeed-show-entry #'elfeed-tube--auto-fetch)
   (remove-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
   t)
 
@@ -589,10 +590,17 @@ The result is a plist with the following keys:
 
 (aio-defun elfeed-tube--get-invidious-url ()
   (or elfeed-tube-invidious-url
-      (let ((servers (or elfeed-tube--invidious-servers
-                         (setq elfeed-tube--invidious-servers
-                               (aio-await (elfeed-tube--get-invidious-servers))))))
-        (elfeed-tube--random-elt servers))))
+      (let ((servers
+             (or elfeed-tube--invidious-servers
+                 (setq elfeed-tube--invidious-servers
+                       (elfeed--shuffle
+                        (aio-await (elfeed-tube--get-invidious-servers)))))))
+        (car servers))))
+
+(defsubst elfeed-tube--nrotate-invidious-servers ()
+  (setq elfeed-tube--invidious-servers
+        (nconc (cdr elfeed-tube--invidious-servers)
+               (list (car elfeed-tube--invidious-servers)))))
 
 (aio-defun elfeed-tube--fetch-captions-tracks (entry)
   (let* ((video-id (elfeed-tube--get-video-id entry))
@@ -734,35 +742,6 @@ The result is a plist with the following keys:
                   for cat = (plist-get skip :category)
                   when (member cat elfeed-tube--sblock-categories)
                   collect `(:category ,cat :segment ,(plist-get skip :segment)))))
-    ;; captions
-    ;; (thread-last captions
-    ;;              (cddr)
-    ;;              (mapcar (pcase-lambda (`(,hd ((,sm . ,st) ,dur) ,tx))
-    ;;                  (let ((match
-    ;;                         (cl-some
-    ;;                          (lambda (skip)
-    ;;                            (pcase-let ((cat (intern (plist-get skip :category)))
-    ;;                                        (`(,beg ,end) (plist-get skip :segment))
-    ;;                                        (sn (string-to-number st)))
-    ;;                              (if (and (> sn beg) (< sn end))
-    ;;                                  `(,cat ((,sm . ,st) ,dur) ,tx))))
-    ;;                                  sblock-filtered)))
-    ;;                    (or match `(,hd ((,sm . ,st) ,dur) ,tx)))))
-    ;;              (nconc '(transcript nil)))
-    
-    
-    ;; (cl-loop for (hd ((sm . st) dur) tx) in (cddr captions)
-    ;;          if (cl-some (lambda (skip)
-    ;;                        (pcase-let ((cat (intern (plist-get skip :category)))
-    ;;                                    (`(,beg ,end) (plist-get skip :segment))
-    ;;                                    (sn (string-to-number st)))
-    ;;                          (if (and (> sn beg) (< sn end))
-    ;;                              `(,cat ((,sm . ,st) ,dur) ,tx))))
-    ;;                      sblock-filtered)
-    ;;          collect it into captions-filtered
-    ;;          else collect `(,hd ((,sm . ,st) ,dur) ,tx) into captions-filtered
-    ;;          finally return (nconc '(transcript nil) captions-filtered))
-    
     (cl-loop for telm in (cddr captions)
              do (when-let
                     ((cat
@@ -810,6 +789,7 @@ The result is a plist with the following keys:
                     "[Description][video:%s]: JSON malformed %s"
                     (elfeed-tube--truncate (elfeed-entry-title entry))
                     (elfeed-tube--attempt-log attempts))
+                   (elfeed-tube--nrotate-invidious-servers)
                    (aio-await
                     (elfeed-tube--fetch-desc entry (- attempts 1)))))
               ;; Retry #attempts times
@@ -819,6 +799,7 @@ The result is a plist with the following keys:
                api-url
                (plist-get response :error-message)
                (elfeed-tube--attempt-log attempts))
+              (elfeed-tube--nrotate-invidious-servers)
               (aio-await
                (elfeed-tube--fetch-desc entry (- attempts 1)))))
 
@@ -828,69 +809,84 @@ The result is a plist with the following keys:
 
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
   (when (elfeed-tube--youtube-p entry)
-    (let* ((existing (elfeed-tube--gethash entry))
-           (data-item (or existing
-                          (elfeed-tube-item--create))))
+    (let* ((cached (elfeed-tube--gethash entry))
+           description thumb duration captions errors)
       
+      ;; When to fetch a field:
+      ;; - force-fetch is true: always fetch
+      ;; - entry not cached, field not saved: fetch
+      ;; - entry not cached but saved: don't fetch
+      ;; - entry is cached with errors: don't fetch
+      ;; - entry is cached without errors, field not empty: don't fetch
+      ;; - entry is saved and field not empty: don't fetch
+
       ;; Record description
       (when (and (cl-some #'elfeed-tube-include-p
-                          '(duration thumbnail description))
+                          '(description duration thumbnail))
                  (or force-fetch
-                     (not (or (memq 'desc
-                                    (elfeed-tube-item-error data-item))
-                              existing
-                              (elfeed-entry-content entry)))))
+                     (not (or (and cached
+                                   (or (cl-intersection
+                                        '(description duration thumbnail)
+                                        (elfeed-tube-item-error cached))
+                                       (elfeed-tube-item-length cached)
+                                       (elfeed-tube-item-desc cached)
+                                       (elfeed-tube-item-thumb cached)))
+                              (or (elfeed-entry-content entry)
+                                  (elfeed-meta entry :thumbnail)
+                                  (elfeed-meta entry :duration))))))
         (if-let ((api-data
                   (aio-await (elfeed-tube--fetch-desc entry))))
             (progn
               (when (elfeed-tube-include-p 'thumbnail)
-                (setf (elfeed-tube-item-thumb data-item)
+                (setf thumb
                       (plist-get api-data :thumb)))
               (when (elfeed-tube-include-p 'description)
-                (setf (elfeed-tube-item-desc data-item)
+                (setf description
                       (plist-get api-data :desc)))
               (when (elfeed-tube-include-p 'duration)
-                (setf (elfeed-tube-item-length data-item)
+                (setf duration
                       (plist-get api-data :length))))
-          (push 'desc (elfeed-tube-item-error data-item))))
+          (setq errors (append errors '(description duration thumbnail)))))
 
       ;; Record captions
       (when (and (elfeed-tube-include-p 'captions)
                  (or force-fetch
-                     (not (or (memq 'caption
-                                    (elfeed-tube-item-error data-item))
-                              existing
+                     (not (or (and cached
+                                   (or (elfeed-tube-item-caption cached)
+                                       (memq 'captions (elfeed-tube-item-error cached))))
                               (elfeed-ref-p
                                (elfeed-meta entry :caption))))))
-        (if-let ((caption (aio-await (elfeed-tube--fetch-captions entry))))
-            (progn 
-              ;; (print (format "recording %S to %S"
-              ;;                (cl-subseq caption 0 5)
-              ;;                (elfeed-entry-title entry))
-              ;;        (get-buffer "*scratch*"))
-              (setf (elfeed-tube-item-caption data-item) caption))
-          (push 'caption (elfeed-tube-item-error data-item))))
+        (if-let ((caption-new
+                  (aio-await (elfeed-tube--fetch-captions entry))))
+            (setf captions caption-new)
+          (push 'captions errors)))
 
-      (if elfeed-tube-save-to-db-p
+      ;; (with-current-buffer (get-buffer-create "fetch-test.el")
+      ;;   (erase-buffer)
+      ;;   (cl-loop for s in (list duration thumb description captions)
+      ;;            do (prin1 s (current-buffer))
+      ;;            do (insert "\n")
+      ;;            finally (display-buffer (current-buffer))))
+      
+      (if (and elfeed-tube-save-to-db-p
+               (or duration captions description thumb))
           ;; Store in db
-          (progn (elfeed-tube--write-db entry data-item)
-                 (when (elfeed-tube--same-entry-p
-                        entry elfeed-show-entry)
-                   ;; (elfeed-show-refresh)
-		   )
+          (progn (elfeed-tube--write-db
+                  entry
+                  (elfeed-tube-item--create
+                   :length duraion :desc description :thumb thumb
+                   :caption captions))
                  (elfeed-tube-log
                   'info "Saved to elfeed-db: %s"
                   (elfeed-entry-title entry)))
         ;; Store in session cache
-        (when (cl-some (lambda (f) (funcall f data-item))
-                       '(elfeed-tube-item-length
-                         elfeed-tube-item-thumb
-                         elfeed-tube-item-desc
-                         elfeed-tube-item-caption
-                         elfeed-tube-item-error))
-          (elfeed-tube--puthash entry data-item force-fetch))
-        ;; (elfeed-tube-show entry)
-	))))
+        (when (or duration captions description thumb errors)
+          (elfeed-tube--puthash
+           entry
+           (elfeed-tube-item--create
+            :length duration :desc description :thumb thumb
+            :caption captions :error errors)
+           force-fetch))))))
 
 ;; Interaction
 (defun elfeed-tube--browse-at-time (pos)

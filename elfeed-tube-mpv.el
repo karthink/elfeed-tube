@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'pulse)
+
 (defvar elfeed-tube--mpv-available-p
   (and (executable-find "mpv")
        (or (executable-find "youtube-dl")
@@ -15,6 +17,9 @@ entry.")
 
 (define-key elfeed-show-mode-map
   (kbd "C-c C-f") #'elfeed-tube-mpv-follow-mode)
+
+(define-key elfeed-show-mode-map
+  (kbd "C-c C-w") #'elfeed-tube-mpv-where)
 
 (defsubst elfeed-tube-mpv--check-path (video-url)
   (condition-case nil
@@ -79,12 +84,7 @@ entry.")
 		 (condition-case nil 
 		     (when-let ((mpv-time (mpv-get-property "time-pos")))
 		       (with-current-buffer entry-buf
-			 (while (not (get-text-property (point) 'elfeed-tube-timestamp))
-			   (goto-char (or (previous-single-property-change
-					   (point) 'elfeed-tube-timestamp)
-					  (next-single-property-change
-					   (point) 'elfeed-tube-timestamp))))
-			 
+
 			 ;; Create overlay
 			 (unless (overlayp elfeed-tube-mpv--overlay)
 			   (save-excursion
@@ -96,29 +96,59 @@ entry.")
 			     (overlay-put elfeed-tube-mpv--overlay
 					  'face '(:inverse-video t))))
 			 
-			 ;; Update overlay
-			 (if (> (get-text-property (point) 'elfeed-tube-timestamp)
-				mpv-time)
-			     (let ((match (text-property-search-backward
-					   'elfeed-tube-timestamp mpv-time
-					   (lambda (mpv cur)
-					     (< (or cur
-						    (get-text-property
-						     (1+ (point))
-						     'elfeed-tube-timestamp))
-						(- mpv 1))))))
-			       (goto-char (prop-match-end match))
-			       (text-property-search-forward 'elfeed-tube-timestamp)
-			       (forward-char 1))
-			   (let ((match (text-property-search-forward
-					 'elfeed-tube-timestamp mpv-time
-					 (lambda (mpv cur) (if cur (> cur (- mpv 1)))))))
-			     (goto-char (prop-match-beginning match))))
-			 
-			 (move-overlay elfeed-tube-mpv--overlay
-				       (save-excursion (beginning-of-visual-line) (point))
-				       (save-excursion (end-of-visual-line) (point)))))
+                         ;; Update overlay
+                         (when-let ((next (elfeed-tube-mpv--where-internal mpv-time)))
+                           (goto-char next)
+                           (move-overlay elfeed-tube-mpv--overlay
+				         (save-excursion (beginning-of-visual-line) (point))
+				         (save-excursion (end-of-visual-line) (point))))))
 		   ('error nil))))))
+
+(defun elfeed-tube-mpv--where-internal (mpv-time)
+  (save-excursion 
+      (while (not (get-text-property (point) 'elfeed-tube-timestamp))
+        (goto-char (or (previous-single-property-change
+		        (point) 'elfeed-tube-timestamp)
+		       (next-single-property-change
+		        (point) 'elfeed-tube-timestamp))))
+
+      (if (> (get-text-property (point) 'elfeed-tube-timestamp)
+	     mpv-time)
+	  (let ((match (text-property-search-backward
+		        'elfeed-tube-timestamp mpv-time
+		        (lambda (mpv cur)
+			  (< (or cur
+			         (get-text-property
+				  (1+ (point))
+				  'elfeed-tube-timestamp))
+			     (- mpv 1))))))
+	    (goto-char (prop-match-end match))
+	    (text-property-search-forward 'elfeed-tube-timestamp)
+	    (forward-char 1))
+        (let ((match (text-property-search-forward
+		      'elfeed-tube-timestamp mpv-time
+		      (lambda (mpv cur) (if cur (> cur (- mpv 1)))))))
+          (prop-match-beginning match)))))
+
+(defun elfeed-tube-mpv-where ()
+  "Jump to the current position of mpv playback."
+  (interactive)
+  (cond
+   ((not (featurep 'mpv))
+    (message "mpv-where requires the mpv package. You can install it with M-x `package-install' RET mpv RET."))
+   ((not (and (derived-mode-p 'elfeed-show-mode)
+              (elfeed-tube--youtube-p elfeed-show-entry)))
+    (message "Not in an elfeed-show buffer for a Youtube video!"))
+   ((not (mpv-live-p))
+    (message "No running instance of mpv is connected to Emacs."))
+   ((or (previous-single-property-change
+	 (point) 'elfeed-tube-timestamp)
+	(next-single-property-change
+	 (point) 'elfeed-tube-timestamp))
+    (goto-char (elfeed-tube-mpv--where-internal
+                (mpv-get-property "time-pos")))
+    (pulse-momentary-highlight-one-line))
+   (t (message "Transcript location not found in buffer."))))
 
 (define-minor-mode elfeed-tube-mpv-follow-mode
   "Toggle mpv follow mode in elfeed-show buffers that display
@@ -130,6 +160,9 @@ transcript to seek to that point in the video."
   :global nil
   :version "0.10"
   :lighter "(-->)"
+  :keymap (let ((map (make-sparse-keymap)))
+            (prog1 map
+              (define-key map " " #'mpv-pause)))
   :group 'elfeed-tube
   (if elfeed-tube-mpv-follow-mode
       (cond
