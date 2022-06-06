@@ -1,17 +1,54 @@
-#+title: Elfeed-Tube: Youtube On /Your/ Terms
+#+title: Elfeed Tube: Youtube on /your/ terms
 
-Elfeed-Tube is an Emacs package for a richer, more interactive, noise-free and fully text-capable interface to your Youtube subscriptions and playlists using Elfeed, the RSS feed reader for Emacs. Think of it as supercharging Elfeed, or perhaps a taste of what the RSS/Atom protocol /could have become today/ if it had continue to evolve.
+Elfeed Tube is an Emacs package for a richer, interactive, noise-free and fully text-capable interface to your Youtube subscriptions and playlists using Elfeed, the RSS feed reader for Emacs. Think of it as supercharging Elfeed, or perhaps a taste of what the RSS/Atom protocol /could have become today/ if it had continue to evolve.
 
-Elfeed-tube adds video descriptions, metadata and "live" transcripts (see below) for all Youtube videos entries in Elfeed. Here is what a video entry looks like:
+Elfeed Tube adds video descriptions, metadata and "live" transcripts (see below) for all Youtube video entries in Elfeed. Here is what a video entry looks like:
 
-Left: Elfeed. Right: Elfeed with Elfeed-Tube enabled.
+#+html: <p align="center"><img src="media/elfeed-tube-1.jpg"></p>
+
+Here is the same Youtube video entry in Elfeed without Elfeed Tube:
+
+#+html: <p align="center"><img src="media/elfeed-tube-without.jpg"></p>
+
+Elfeed Tube works great for subscribing to channels/playlists with longer form videos, podcasts, technical talks and lectures.
+
+* Contents                                                                 :TOC:
+- [[#features][Features]]
+  - [[#fully-asynchronous-updates][Fully asynchronous updates]]
+  - [[#description-and-other-metadata][Description and other metadata]]
+- [[#transcripts][Transcripts]]
+  - [[#noise-free-text-no-ad-reads][Noise-free text (No Ad reads)]]
+  - [[#interactive][Interactive]]
+  - [[#live]["Live"]]
+  - [[#archivable-and-retrievable][Archivable and retrievable]]
+  - [[#searchable-and-org-linkable-its-just-an-emacs-buffer][Searchable and Org-linkable (It's just an Emacs buffer)]]
+  - [[#putting-it-together][Putting it together]]
+- [[#setup][Setup]]
+  - [[#set-up-with-use-package][Set up with =use-package=]]
+  - [[#set-up-without][Set up without]]
+- [[#usage][Usage]]
+  - [[#step-i-add-youtube-subscriptions-to-elfeed][Step I: Add Youtube subscriptions to Elfeed]]
+  - [[#step-ii-use-elfeed-as-usual][Step II: Use Elfeed as usual]]
+  - [[#commands-summary][Commands summary]]
+  - [[#optional-for-live-captions-with-mpv][(Optional) For "Live" captions with MPV]]
+  - [[#optional-preview-entries-and-save-manually][(Optional) Preview entries and save manually]]
+  - [[#optional-fetch-manually][(Optional) Fetch manually]]
+- [[#customization][Customization]]
+  - [[#disabling-fields][Disabling fields]]
+  - [[#customizing-fields][Customizing fields]]
+  - [[#persistence][Persistence]]
+- [[#faq][FAQ]]
+- [[#limitations][Limitations]]
+- [[#planned-features][Planned features]]
+- [[#alternatives][Alternatives]]
+- [[#acknowledgments][Acknowledgments]]
 
 * Features
 ** Fully asynchronous updates
-Like Elfeed, Elfeed-tube fetches all data asynchronously. /Emacs will not block/. (This gets top billing because /I know the pain/.)
+Like Elfeed, Elfeed Tube fetches all data asynchronously. /Emacs will not block/. (This gets top billing because I /know the pain/.)
 
 ** Description and other metadata
-Elfeed-tube adds the video duration, thumbnail and the video description to each Youtube entry in Elfeed. These elements can be turned off individually or tweaked to your liking.
+Elfeed Tube adds the video duration, thumbnail and the video description to each Youtube entry in Elfeed. These elements can be turned off individually or tweaked to your liking.
 
 For example, you may prefer to avoid including video descriptions because they often have linkspam, or prefer larger thumbnails.
 
@@ -23,73 +60,103 @@ Youtube transcripts, including auto-generated ones, are automatically downloaded
 | Arabic  |
 
 These transcripts are:
-*** *Searchable and Org-linkable* (It's just an Emacs buffer)
-You can text search your transcripts, link to them, quote from them, etc. Tagging support, date-oriented and metadata-based search is included as part of Elfeed.
+** Noise-free text (No Ad reads)
+There are no sponsor reads, ads or promotions in the transcript. These are automatically recognized and either greyed out or hidden from view. Here's an Ad read section that you now don't have to read:
 
-When available (which is most of the time), the transcripts can be your primary entry point to the video. ("This could have been a palaver-free blog post.") This works especially well with technical content, talks and podcasts. 
+#+html: <p align="center"><img src="media/elfeed-tube-sblock.png" width="80%"></p>
 
-However, there's more to them than just that. Transcripts are:
+[[https://i.imgur.com/TUn4xmb.jpeg][Here]] is a more extensive version.
 
-*** *Noise-free text* (No Ad reads)
-There are no sponsor reads, ads or promotions in the transcript. These are automatically recognized and either greyed out or hidden from view:
+# https://imgur.com/a/Oyly62g
+You can turn this feature off, or add more recognized sections to the strike-list, like intros and outros.
 
-Struck out here: An ad read section that you now don't have to read.
-
-You can turn this off, or add more recognized sections to the strike-list, like intros and outros.
-
-*** *Interactive*
+** Interactive
 Clicking on a segment opens the video at that time in your browser or video player of choice:
 
-You can also move your cursor there and press return.
-*** *"Live"*
-With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer, or jump to the currently playing segment in Emacs:
+#+html: <p align="center"><img src="media/elfeed-tube-caption.png" width="80%"></p>
 
-You can also follow along with the video in Emacs, and seeking through text is still available:
+You can also move your cursor there and press return. The tool-tip provides more help.
+** "Live"
+- With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer:
 
-*** *Archivable and retrievable*
-They're stored in your Elfeed database like any other text entry. Link or bookmark them in Emacs, refer to them in your other notes.
+  #+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4"></video></p>
+# https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4
+
+- You can jump in Emacs to the current video position with =elfeed-tube-mpv-where= (~C-c C-w~):
+
+  #+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172330220-1948bae0-f7c4-447a-bdeb-2112401ad876.mp4"></video></p>
+
+- Finally, you can also follow along with the video in Emacs:
+
+  # #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172347599-8f5fc73c-2229-4292-9815-3b477dce83c2.mp4"></video></p>
+
+  #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video></p>
+  
+  # #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172445445-cd7ed215-3f8a-44b0-b0bf-24d68b2bdfbe.mp4"></video></p>
+  
+  #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172447539-9bbe4a73-eca6-40a1-bf15-0bee8f3b8d94.mp4"></video></p>
+  
+  To do this, turn on =elfeed-tube-mpv-follow-mode= (~C-c C-f~). When this mode is active you can pause video playback with ~SPC~. Clicking on any segment in the transcript will still seek to that point. 
+  
+  This does not lock up Emacs. You can work in a different window while tracking updates in this one.
+
+** Archivable and retrievable
+The information fetched by Elfeed Tube, including the transcripts (with timing information) is associated with the feed and stored in your Elfeed database like any other text entry. You can bookmark it in Emacs, refer to it in your other notes and so on.
 
 The Elfeed database is plain text, optionally gzipped. You can be sure that it will be readable decades from now.
 
-*** Re-punctuated (Experimental)                                    :noexport:
-There is currently experimental support for adding punctuation to (English-only) auto-generated captions. This uses a trained recurrent neural net provided by an online service. 
+** Searchable and Org-linkable (It's just an Emacs buffer)
+You can text search your transcripts, Org-link them, quote from them, etc. Tagging support, date-oriented and metadata-based search is included as part of Elfeed.
 
-However For privacy reasons, this is turned off by default.
+When transcripts are available in some form, which is most of the time, they can be your primary entry and reference point for the video. This works especially well with technical content, tutorials, talks and podcasts.
+
+/NOTE/: It would be fantastic to be able to search for caption text across your entire Elfeed database instead of inside an entry, but Elfeed does not (yet) support full-text search. You'll have to search for entries by supported fields instead, through a combination of the entry date range, tags, entry title and channel name etc.
 
 ** Putting it together
-Combined with the text manipulation capabilities of Emacs, you can combine these into an extremely powerful video watching interface. You can (partially) treat video like you treat text.
+Combined with the text manipulation capabilities of Emacs, you can combine these features into a very accessible video interface. You can handle video partially like you handle text:
 
-- I subscribe using Elfeed to playlists instead of channels, such as lecture video series. With the included transcripts and interactivity, I find this much better than storing some browser bookmarks or Org entries.
+- You can narrow the buffer to just occurrences of a phrase in the transcript, then jump between where they appear. In this example I use =consult-focus-lines= to show only lines mentioning "Ramanujan", then jump through these points in the video by pressing ~RET~. Full-text video search!
   
-- You can narrow the buffer to just occurrences of a phrase in the transcript, then jump between where they appear in the video:
+  #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172359973-b24e7a91-6384-44a2-b5fc-57d4d2f0e4aa.mp4"></video></p>
   
-  In this example I use =consult-focus-lines= to show only lines of the transcript containing the phrase "".
+  This search missed one mention (which was spelled "ramonogen"), but Youtube's auto-generated captions do a surprisingly good job of capturing most common English words. Videos with uploaded captions (most talks/technical videos) don't have this problem.
 
-- Want to jump to where you heard a podcast host talking about quadcopters? Search the buffer using Isearch in Emacs, then press the Enter key:
+- The simpler version: Want to jump to where in the episode you heard a podcast host talking about Tunisian history? Search the buffer for Tunisia using Isearch in Emacs, then press ~RET~. 
 
-NOTE: It would be fantastic to be able to search for caption text across your entire Elfeed database, but Elfeed does not (yet) support full-text search. You'll have to search by supported fields instead, through a combination of the entry date range, tags, entry title and channel name text etc.
+- Youtube video descriptions for technical videos often have useful links or references. Here I use [[https://github.com/oantolin/embark][Embark]] to collect the (non-Youtube, non-sponsor) links and open them in a browser:
+  
+  #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172365106-3896cc4f-3d5f-4cc6-b8d3-0c9df444837e.mp4"></video></p>
 
+  This works in regular Elfeed too, of course, but for Youtube videos this is much more pleasant than hunting for the tiny "more..." dropdown in the web browser.
+
+- Watching a lecture or a long video and need a break? Jump to the currently playing position in the transcript with =elfeed-tube-mpv-where= (~C-c C-w~), then bookmark the buffer (=bookmark-set=, ~C-x r m~) and quit Emacs. You can pick up right where you left off in both the transcript and video with =bookmark-jump= (~C-x r b~).
+
+- Want to focus playback to a certain part of the transcript? Narrow the buffer (~C-x n n~) to the region you want and turn on =elfeed-tube-mpv-follow-mode=.
+  
 * Setup
-This package is not available on MELPA yet. You can install it via Straight/ Quelpa or by cloning this repository.
+This package is not available on ELPA/MELPA yet. You can install it via Quelpa/Straight or by cloning this repository and running =make=.
 
-Requirements:
-- Emacs 27.1 or later
+*Requirements*:
+- Emacs 27.1 or newer
 - Curl
 
-Dependencies:
-- Elfeed, the feed reader for Emacs.
-- aio, the async-IO library for Emacs.
-- (Optional) mpv: The mpv library for Emacs. For "live" transcript interaction.
+*Dependencies*:
+- [[https://github.com/skeeto/elfeed][Elfeed]], the feed reader for Emacs.
+- [[https://github.com/skeeto/emacs-aio][aio]], the async-IO library for Emacs.
+Dependencies will be automatically installed if you install Elfeed Tube using a package manager (Straight or Quelpa, or Emacs' built-in package.el once this is on ELPA/MELPA.)
+
+*Optional* (for "live" transcripts):
+- [[https://mpv.io/][MPV]] video player and [[https://youtube-dl.org/][youtube-dl]] (or [[https://github.com/yt-dlp/yt-dlp/][yt-dlp]])
+- [[https://github.com/kljohann/mpv.el][mpv]]: The mpv library for Emacs (=M-x package-intall mpv= or see setup block below)
 
 ** Set up with =use-package=
 #+BEGIN_SRC emacs-lisp
   (use-package elfeed-tube
-    :straight t
+    :straight (:host github :repo "karthink/elfeed-tube")
     :after elfeed
     :config
-    ;; Set to nil if you only want to view, not save,
-    ;; data fetched by elfeed-tube
-    (setq elfeed-tube-save-to-db-p t)
+    ;; (setq elfeed-tube-auto-save-p nil) ;; t is auto-save (not default)
+    ;; (setq elfeed-tube-auto-fetch-p t) ;;  t is auto-fetch (default)
     (elfeed-tube-setup)
   
     :bind (:map elfeed-show-mode-map
@@ -102,25 +169,21 @@ Dependencies:
 
 If you want "live" captions and better MPV support:
 #+BEGIN_SRC emacs-lisp
-    (use-package mpv :ensure t :defer t)
-    (use-package elfeed-tube-mpv
-      :defer t
-      :bind
-      (:map elfeed-show-mode-map
-            ("C-c C-f" . elfeed-tube-mpv-follow-mode)))
+  (use-package mpv :ensure t :defer t)
+  (use-package elfeed-tube-mpv
+    :bind (:map elfeed-show-mode-map
+                ("C-c C-f" . elfeed-tube-mpv-follow-mode)
+                ("C-c C-w" . elfeed-tube-mpv-where)))
 #+END_SRC
 
 ** TODO Set up without
 * Usage
-Elfeed-tube tries its best to work out of the box with no set up, but the first step below is unavoidable:
+Elfeed Tube tries its best to work out of the box with no set up, but Step I below is unavoidable if you're starting fresh. If you already have Youtube feeds in your Elfeed feed list, you can go to Step II.
 
-** I: Add youtube subscriptions to Elfeed
-If you already have Youtube feeds in your Elfeed feed list, you can skip this step.
------
-
+** Step I: Add Youtube subscriptions to Elfeed
 Fortunately, Youtube still provides RSS feeds for channels and playlists. Unfortunately, Youtube doesn't make it easy to find them. 
 
-Elfeed-tube provides a helper function: =M-x elfeed-tube-add-feeds= to find the RSS feed for a channel or playlist. When given one ore more Youtube video/playlist/channel URLs or plain text search terms, it will:
+Elfeed Tube provides a helper function: =M-x elfeed-tube-add-feeds= to find the RSS feeds (asynchronously) for channels or playlists. When given one ore more Youtube video/playlist/channel URLs or plain text search terms, it will:
 
 - Find the corresponding feeds and display a summary you can confirm
 - Add the feeds to your list of elfeed-feeds.
@@ -133,17 +196,18 @@ Examples (=RET= means pressing return):
 
 + =M-x elfeed-tube-add-feeds= =RET= =cgp grey, julia computing, https://www.youtube.com/playlist?list=PLZdCLR02grLqSy15ALLAZDU6LGpAJDrAQ= =RET=  
 + =M-x elfeed-tube-add-feeds= =RET= =https://www.youtube.com/watch?v=6etTERFUlUI= =RET=
-(Be warned: URLs are safer, plain text queries might return the wrong channel!)
+
+Queries are separated by Emacs' =crm-separator=, which is comma (~,~) by default. Be warned: URLs are safer, plain text queries might find the wrong channels!
   
 When called noninteractively, it can accept a list of URLs or queries:
 #+BEGIN_SRC emacs-lisp
-  (elfeed-tube-add-feed '("veritasium"
-                          "https://www.youtube.com/playlist?list=PLEoMzSkcN8oMc34dTjyFmTUWbXTKrNfZA"
-                          "quanta magazine"
-                          "julia computing"
-                          "https://www.youtube.com/watch?v=bSVfItpvG5Q"
-                          "https://youtu.be/7CM7Ef-dPWQ"
-                          "tom scott"))
+  (elfeed-tube-add-feeds '("veritasium"
+                           "https://www.youtube.com/playlist?list=PLEoMzSkcN8oMc34dTjyFmTUWbXTKrNfZA"
+                           "quanta magazine"
+                           "julia computing"
+                           "https://www.youtube.com/watch?v=bSVfItpvG5Q"
+                           "https://youtu.be/7CM7Ef-dPWQ"
+                           "tom scott"))
 #+END_SRC
 
 See the docstring for more options.
@@ -151,17 +215,33 @@ See the docstring for more options.
 *** Other ways to find feeds
 You can use a web service like https://rssbox.herokuapp.com/, or look in the HTML of a Youtube channel page if you like your web browser's element inspector!
 
-** II: Use Elfeed as usual
+** Step II: Use Elfeed as usual
 That's it. Assuming you've run =(elfeed-tube-setup)=, included in the above use-package block, there's nothing else to do.
 
-If you're new to Elfeed, you can start with =M-x elfeed-search=.
+If you're new to Elfeed, you can start with =M-x elfeed=.
 
-In case the fetch for a Youtube entry fails you can call =M-x elfeed-tube-fetch= with a prefix argument (~C-u F~ or ~C-u M-x elf...~) to force a refetch.
+In case the fetch for a Youtube entry fails you can call =M-x elfeed-tube-fetch= with a prefix argument (~C-u F~ or ~C-u M-x elfeed-tube-fetch~) to force a refetch.
+
+** Commands summary
+| Command                     | Description                                  | Where              | suggested key-binding   |
+|-----------------------------+----------------------------------------------+--------------------+-------------------------|
+| =elfeed-tube-add-feeds=       | Find youtube feeds from search queries       | Anywhere in Emacs  | N/A                     |
+| =elfeed-tube-fetch=           | Manually fetch video info (optional)         | Anywhere in Elfeed | ~F~                       |
+| =elfeed-tube-save=            | Manually save entry to Elfeed DB (optional)  | In an Elfeed entry | ~C-x C-s~                 |
+| =elfeed-tube-mpv-where=     | Jump to current video location in transcript | In an Elfeed entry | ~C-c C-w~               |
+| =elfeed-tube-mpv-follow-mode= | Continuously track a video playing in MPV    | In an Elfeed entry | ~C-c C-f~               |
+| N/A                         | Open/Seek video to this time                 | In an Elfeed entry | ~mouse-1~, ~mouse-2~ or ~RET~ |
 
 ** (Optional) For "Live" captions with MPV
-For "live" following a video in Emacs you can turn on =elfeed-tube-mpv-follow-mode=, with (~C-c C-f~) in an Elfeed entry.
+For a "live" connection between the transcript and MPV:
 
-Note that this requires the =mpv= library to be installed, see the setup section.
+- Ensure the =mpv= library is installed (=M-x package-install mpv=). Without it, you can still open videos at transcript locations in MPV but it will not be "live".
+- Start playback by clicking anywhere in the transcript.
+- To seek to a text segment click there or press ~RET~.
+- To jump to the current location in the transcript, use =elfeed-tube-mpv-where= (~C-c C-w~).
+- To track a video continuously, turn on =elfeed-tube-mpv-follow-mode= (~C-c C-f~). You can continue to work in a different window.
+
+Additionally, playback with "live" transcripts will behave as expected with buffer narrowing.
 
 ** (Optional) View entries instead of auto-saving them
 Not all Youtube videos contain gems of wisdom, to put it mildly. You may thus want to only /view/ video information instead of /adding/ it directly to the Elfeed database. This is especially salient since there's no (user-facing) way to delete items in Elfeed.
@@ -173,9 +253,13 @@ To do this you can set
 
 Now Youtube entries you view will feature a =[*NOT SAVED*]= marker:
 
-The info will be cached for this Emacs session. You can persist an entry on disk by clicking on this marker, or with your =save-buffer= keybinding (typically ~C-x C-s~):
+#+html: <p align="center"><img src="media/elfeed-tube-not-saved.jpg"></p>
 
-(You can change the marker style through =elfeed-tube-minimal-save-indicator-p= if you'd like a more subdued indicator.)
+The fetched info will be cached for this Emacs session. Entries that you deem useful (such as the handy Guix tutorial in this video) can be added to your Elfeed database by clicking on this marker, or with your =save-buffer= keybinding (typically ~C-x C-s~):
+
+#+html: <p align="center"><img src="media/elfeed-tube-now-saved.jpg"></p>
+
+You can change the marker style through =elfeed-tube-minimal-save-indicator-p= if you'd like a more subdued indicator.
 
 ** (Optional) Fetch manually
 Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch= (bound to ~F~) from an Elfeed Search or Show buffer to fetch selectively. To do this, remove =(elfeed-tube-setup)= from the setup code and replace it with
@@ -184,12 +268,12 @@ Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch
 (elfeed-tube-setup-no-fetch)
 #+END_SRC
 
-=elfeed-tube-fetch= will act on all entries in a selected region in an Elfeed Search buffer.
+=elfeed-tube-fetch= will fetch info for all Youtube entries in a selected region in an Elfeed Search buffer.
 
 You can mix and match auto/manual fetching and auto/manual saving of entries to the Elfeed database.
 
 * Customization
-Elfeed-tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
+Elfeed Tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
 
 ** Disabling fields
 Customize =elfeed-tube-metadata-fields=. To show only the duration and captions but no description or thumbnail:
@@ -232,21 +316,8 @@ Yes, this does mean that the fetcher code is going to need updating often. Them'
 *** Can I use the transcripts feature without using Elfeed?
 (Or without adding the channel/playlist feed to my Elfeed-feeds)
 
-Not at present. Elfeed-tube depends on Elfeed to do a lot of the lifting. If you're interested in creating a stand alone package from this please go ahead.
-* Limitations
-1. Elfeed provides only metadata, not full-text search acrosss your entries since it is (almost) a plain text database.
-2. While Elfeed is an aggregator, Youtube RSS feeds only contain the last dozen or so videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed, unless you can find feeds that include older content.
-3. There is no (user-facing) way to delete entries from an Elfeed database, so curate wisely! Note that my Elfeed database has about 32,000 entries across 272 feeds and it's very snappy so far.
-4. Live transcript seeking and tracking can have an error of ±1 second.
-5. Fetches can occasionally fail. If this happens you may need to call =M-x elfeed-tube-fetch= manually on an entry or selection of entries.
-* Planned features
-- [ ] Elfeed search keyword for video duration: ("=crafters <25min" should return videos from the "System Crafters" Youtube channel feed that are under 25 minutes long, etc.)
-- [ ] Support for Youtube's official API
-- [ ] Re-punctuating auto-generated captions using a punctuator2 web service
-- [ ] =url-retrieve= support so Curl isn't needed
-- [ ] Backporting to Emacs 26.x
-  
-** What about these Youtube features?
+Not at present. Elfeed Tube depends on Elfeed to do a lot of the lifting. If you're interested in creating a stand alone package from this please go ahead.
+*** What about these Youtube features?
 No support is currently planned for
 
 - Search
@@ -254,7 +325,7 @@ No support is currently planned for
 - Comments
 - Likes, +Dislikes+ and views
 
-Elfeed-tube is *not* a Youtube client for Emacs. 
+Elfeed Tube is *not* a Youtube client for Emacs. 
 
 Instead, it plays to the strengths of RSS: to provide you with a regular digest of self-curated content in a more accessible way than otherwise possible. So search is not planned (see alternatives).
 
@@ -262,11 +333,40 @@ Video recommendations are sometimes useful for discovery, but in their current f
 
 The top comments are occasionally useful, especially on technical videos. I might add support for these in the future, although none are planned as of now.
 
+* Limitations
+1. Elfeed provides only metadata, not full-text search acrosss your entries since it is (almost) a plain text database.
+2. While Elfeed is an aggregator, Youtube RSS feeds only contain the last dozen or so videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed, unless you can find feeds that include older content.
+3. There is no (user-facing) way to delete entries from an Elfeed database, so curate wisely! Note that my Elfeed database has about 32,000 entries across 272 feeds and it's very snappy so far.
+4. Only one MPV instance can be connected to a live transcript in an Emacs session at a time. This is a limitation of the =mpv= library. (You can spawn as many "non-live" instances as you want.)
+5. Live transcript seeking and tracking can have an error of ±1 second.
+6. Fetches can occasionally fail. If this happens you may need to call =M-x elfeed-tube-fetch= manually on an entry or selection of entries.
+* Planned features
+- [ ] Specify what data to fetch per feed instead of globally.
+- [ ] Elfeed search keyword for video duration: ("=crafters <25min" should return videos in the Elfeed DB from the "System Crafters" Youtube channel feed that are under 25 minutes long, etc.)
+- [ ] Support for Youtube's official API
+- [ ] Re-punctuating auto-generated captions using a [[https://github.com/ottokart/punctuator2][punctuator2]] web service
+- [ ] =url-retrieve= support so Curl isn't required
+- [ ] Backporting to Emacs 26.x
+  
 * Alternatives
-- For Youtube video search (including comments and ) from Emacs check out ytel.
--
+- If you are looking for a Youtube client for Emacs, with full search, comments, view counts and video recommendations, check out [[https://github.com/gRastello/ytel][ytel]] with [[https://github.com/xFA25E/ytel-show][ytel-show]].
+- Not an alternative but a nice complement to Elfeed Tube: Lua scripts for MPV can offer a superior Youtube watching experience than anything in the browser. Check out
+  + [[https://github.com/po5/mpv_sponsorblock][mpv-sponsorblock]] for auto-skipping sponsored segments of videos
+  + [[https://github.com/AN3223/dotfiles/blob/master/.config/mpv/scripts/auto-save-state.lua][auto-save-state]] for built-in watch-later functionality
+  + [[https://github.com/jonniek/mpv-playlistmanager][playlist-manager]] for playlist support
+  + [[https://github.com/Eisa01/mpv-scripts#undoredo][undo-redo]] for undo/redoing seeks in MPV
+  + [[https://github.com/Sagnac/streamsave][streamsave]] for saving clips from a video live, without reencoding.
+  + [[https://github.com/cvzi/mpv-youtube-upnext][youtube-upnext]] for in-player video recommendations based on the current video. (Youtube's sidebar, essentially.)
+  [[https://github.com/mpv-player/mpv/wiki/User-Scripts][The full list]] of scripts is overwhelming!
+  
 * Acknowledgments
-- Chris Wellons for writing Elfeed, the best feed reader I've ever used.
-- Chris Wellons for also writing =aio=, the async wrapper for Emacs. It writes callbacks for me so I never have to.
-- Ajay for writing and running Sponsorblock
-- The folks maintaining Invidious instances.
+- Chris Wellons for writing [[https://github.com/skeeto/elfeed][Elfeed]], the best feed reader I've used.
+- Chris Wellons for also writing [[https://github.com/skeeto/emacs-aio][emacs-aio]], the async wrapper for Emacs. It writes callbacks for me so I never have to.
+- Ajay Ramachandran for writing and running [[https://github.com/ajayyy/SponsorBlock][Sponsorblock]]
+- The kind folks maintaining [[https://invidious.io/][Invidious]] instances.
+
+** COMMENT Re-punctuated (Experimental)                                      :noexport:
+There is currently experimental support for adding punctuation to (English-only) auto-generated captions. This uses a trained recurrent neural net provided by an online service. 
+
+However For privacy reasons, this is turned off by default.
+
