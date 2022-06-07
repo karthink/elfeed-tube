@@ -293,14 +293,6 @@ afterwards."
              finally (kill-new (prin1-to-string feeds)))
     (message "Feed URLs saved to kill-ring.")))
 
-;; (defvar elfeed-tube-channels-mode-map
-;;   (let ((map (make-sparse-keymap)))
-;;     (define-key map (kbd "C-c C-k") #'kill-buffer)
-;;     (define-key map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
-;;     map
-;;     ;; (make-composed-keymap (list map) tabulated-list-mode-map)
-;;     ))
-
 (aio-defun elfeed-tube--aio-fetch (url &optional next desc attempts)
   "Fetch URL asynchronously using `elfeed-curl-retrieve'.
 

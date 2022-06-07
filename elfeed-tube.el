@@ -20,7 +20,35 @@
 
 ;;; Commentary:
 
+;; TODO Rename variables consistently
+;; - description to desc everywhere
+;; - caption/captions to captions everywhere
+;; - thumbnail to thumb everywhere
+;; - duration stays as duration
+;; - 'elfeed-tube-timestamp text-prop to just 'timestamp
+;; - urls/servers/url/server: pick something
 ;;
+;; TODO Simplify the customization options:
+;; - elfeed-tube-auto-save-p: save to DB when fetching?
+;; - elfeed-tube-auto-fetch-p: fetch when updating elfeed or opening entires?
+;; 
+;; TODO Separate elfeed-tube-mpv, so it doesn't need to be loaded. Only the
+;; keymaps will have to be accounted for somehow.
+;;
+;; TODO Separate into the following libraries
+;; - elfeed-tube:
+;;   main fetcher (elfeed-tube-fetch),
+;;   main inserter (elfeed-tube-show),
+;;   main saver (elfeed-tube-save)
+;; - elfeed-tube-captions: caption functions (fetch, insert)
+;; - elfeed-tube-desc: metadata functions (fetch desc, thumb, duration, insert)
+;; - elfeed-tube-mpv: mpv integration (minor mode, tracking)
+;; - elfeed-tube-show? (display functions)
+;; - elfeed-tube-test: tests
+;; - elfeed-tube-utils: feed finder, misc functions, general fetcher
+;;
+;; TODO elfeed-tube-mpv:
+;; - separate mpv args, make user option
 
 ;;; Code:
 (require 'elfeed)
@@ -155,12 +183,10 @@ when this is set to true."
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-2] (elfeed-tube-captions-browse-with
                                #'elfeed-tube--browse-at-time))
-    (define-key map (kbd "RET") #'elfeed-tube--browse-at-time)
-    ;; (define-key map [follow-link] 'mouse-face)
+    (define-key map (kbd "RET") #'elfeed-tube-mpv-play)
+    (define-key map [mouse-1] (elfeed-tube-captions-browse-with
+                               #'elfeed-tube-mpv-play))
     map))
-
-(define-key elfeed-tube-captions-map [mouse-1]
-  (elfeed-tube-captions-browse-with #'elfeed-tube-mpv-play))
 
 (defvar elfeed-tube-caption-faces
   '((text      . variable-pitch)
@@ -363,7 +389,8 @@ when this is set to true."
         (let* ((inhibit-read-only t)
                (feed (elfeed-entry-feed elfeed-show-entry))
                (base (and feed (elfeed-compute-base (elfeed-feed-url feed))))
-               (data-item (elfeed-tube--gethash entry)))
+               (data-item (elfeed-tube--gethash entry))
+               insertions)
           
           (goto-char (point-max))
           (when (text-property-search-backward
@@ -400,16 +427,20 @@ when this is set to true."
           (when-let ((_ (elfeed-tube-include-p 'thumbnail))
                      (thumb (or (and data-item (elfeed-tube-item-thumb data-item))
                                 (elfeed-meta entry :thumbnail))))
-            (elfeed-insert-html (elfeed-tube--thumbnail-html thumb)))
+            (elfeed-insert-html (elfeed-tube--thumbnail-html thumb))
+            (push 'thumbnail insertions))
           
           ;; Description
-          (if-let ((_ (elfeed-tube-include-p 'description))
-                   (desc (and data-item (elfeed-tube-item-desc data-item))))
-              (elfeed-insert-html (concat desc "<br>") base))
-
+          (delete-region (point) (point-max))
+          (when (elfeed-tube-include-p 'description)
+            (if-let ((desc (or (and data-item (elfeed-tube-item-desc data-item))
+                               (elfeed-deref (elfeed-entry-content entry)))))
+                (progn (elfeed-insert-html (concat desc "") base)
+                       (push 'description insertions))))
+          
           ;; Captions
           (elfeed-tube--with-db elfeed-tube--captions-db-dir
-            (if-let* ((_ (elfeed-tube-include-p 'captions))
+            (when-let* ((_ (elfeed-tube-include-p 'captions))
                       (caption
                        (or (and data-item (elfeed-tube-item-caption data-item))
                            (and (when-let
@@ -421,11 +452,14 @@ when this is set to true."
                                      (elfeed-tube-log
                                       'error "[Show][Captions] DB parse error: %S"
                                       (elfeed-meta entry :caption)))))))))
-                (progn (when (not (elfeed-entry-content entry))
-                         (kill-region (point) (point-max)))
-                       (elfeed-tube--insert-captions caption))
               (when (not (elfeed-entry-content entry))
-                (kill-region (point) (point-max))))))
+                (kill-region (point) (point-max)))
+              (elfeed-tube--insert-captions caption)
+              (push 'captions insertions)))
+          
+          (if insertions
+              (delete-region (point) (point-max))
+            (insert (propertize "\n(empty)\n" 'face 'italic))))
         (goto-char (point-min))))))
 
 (defvar elfeed-tube--save-state-map
@@ -507,7 +541,8 @@ when this is set to true."
                                      (fill-column w)
                                      (use-hard-newlines t))
                            (fill-region beg (point) nil t)))
-        (goto-char (point-min)))
+        ;; (goto-char (point-min))
+        )
     (elfeed-tube-log 'debug
                      "[Captions][video:%s][Not available]"
                      (or (and elfeed-show-entry (truncate-string-to-width
@@ -516,12 +551,12 @@ when this is set to true."
 
 (defun elfeed-tube--caption-echo (win obj pos)
   (concat
-   (let ((type (get-text-property pos 'type)))
+   (let ((type (get-text-property pos 'type))
+         (time (elfeed-tube--timestamp
+                (get-text-property pos 'elfeed-tube-timestamp))))
      (when (not (eq type 'text))
-       (format "segment: %s\n\n" (symbol-name type))))
-   (format "mouse-1: open video at %s"
-           (elfeed-tube--timestamp
-            (get-text-property pos 'elfeed-tube-timestamp)))))
+       (format "segment: %s\n\n" (symbol-name type)))
+     (format "mouse-1: open video at %s (mpv)\nmouse-2: open video at %s (web browser)" time time))))
 
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)

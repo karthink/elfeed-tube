@@ -15,12 +15,6 @@
 Each function must accept one argument, the current Elfeed
 entry.")
 
-(define-key elfeed-show-mode-map
-  (kbd "C-c C-f") #'elfeed-tube-mpv-follow-mode)
-
-(define-key elfeed-show-mode-map
-  (kbd "C-c C-w") #'elfeed-tube-mpv-where)
-
 (defsubst elfeed-tube-mpv--check-path (video-url)
   (condition-case nil
       (apply #'string=
@@ -47,17 +41,19 @@ entry.")
   (interactive "d")
   (if (not elfeed-tube--mpv-available-p)
       (message "Could not find mpv + youtube-dl/yt-dlp in PATH.")
-    (let* ((time (get-text-property pos 'elfeed-tube-timestamp))
-           (video-id (elfeed-tube--get-video-id elfeed-show-entry))
-           (video-url (concat "https://youtube.com/watch?v="
-                              video-id
-                              "&t="
-                              (number-to-string (floor time))))
-           (args `("--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
-                   "--cache=yes"
-                   ,video-url))
-           (entry elfeed-show-entry))
+    (when-let* ((time (get-text-property pos 'elfeed-tube-timestamp))
+                (video-id (elfeed-tube--get-video-id elfeed-show-entry))
+                (video-url (concat "https://youtube.com/watch?v="
+                                   video-id
+                                   "&t="
+                                   (number-to-string (floor time))))
+                (args `("--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
+                        "--cache=yes"
+                        "--script-opts=osc-scalewindowed=2,osc-visibility=always"
+                        ,video-url))
+                (entry elfeed-show-entry))
       (run-hook-with-args 'elfeed-tube-mpv-play-hook entry)
+      ;; (pulse-momentary-highlight-one-line)
       (if (require 'mpv nil t)
           (if (and (mpv-live-p)
                    (elfeed-tube-mpv--check-path video-url))
@@ -96,6 +92,27 @@ entry.")
 			     (overlay-put elfeed-tube-mpv--overlay
 					  'face '(:inverse-video t))))
 			 
+                         ;; Handle narrowed buffers
+                         (when (buffer-narrowed-p)
+                           (save-excursion
+                             (let (beg end)
+                               (goto-char (point-min))
+                               (setq beg (prop-match-value
+                                          (text-property-search-forward
+                                           'elfeed-tube-timestamp)))
+                               (goto-char (point-max))
+                               (setq end (prop-match-value
+                                          (text-property-search-backward
+                                           'elfeed-tube-timestamp)))
+                               (cond
+                                ((and beg (< mpv-time beg))
+                                 (print "beg" (get-buffer "*scratch*"))
+                                 (mpv-set-property "time-pos" (1- beg)))
+                                ((and end (> mpv-time end))
+                                 (print "end" (get-buffer "*scratch*"))
+                                 (mpv-set-property "time-pos" (1+ end))
+                                 (mpv-set-property "pause" t))))))
+                         
                          ;; Update overlay
                          (when-let ((next (elfeed-tube-mpv--where-internal mpv-time)))
                            (goto-char next)
@@ -124,7 +141,7 @@ entry.")
 			     (- mpv 1))))))
 	    (goto-char (prop-match-end match))
 	    (text-property-search-forward 'elfeed-tube-timestamp)
-	    (forward-char 1))
+	    (min (1+ (point)) (point-max)))
         (let ((match (text-property-search-forward
 		      'elfeed-tube-timestamp mpv-time
 		      (lambda (mpv cur) (if cur (> cur (- mpv 1)))))))
@@ -147,7 +164,9 @@ entry.")
 	 (point) 'elfeed-tube-timestamp))
     (goto-char (elfeed-tube-mpv--where-internal
                 (mpv-get-property "time-pos")))
-    (pulse-momentary-highlight-one-line))
+    (let ((pulse-delay 0.08)
+          (pulse-iterations 16))
+      (pulse-momentary-highlight-one-line))
    (t (message "Transcript location not found in buffer."))))
 
 (define-minor-mode elfeed-tube-mpv-follow-mode
