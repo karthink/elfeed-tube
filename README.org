@@ -10,7 +10,7 @@ Here is the same Youtube video entry in Elfeed without Elfeed Tube:
 
 #+html: <p align="center"><img src="media/elfeed-tube-without.jpg"></p>
 
-Elfeed Tube works great for subscribing to channels/playlists with longer form videos, podcasts, technical talks and lectures.
+Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well for channels/playlists with longer form videos, podcasts, technical talks and lectures. For an introduction to Elfeed and RSS feeds, see [[https://www.youtube.com/watch?v=oHfAht9uTx8][this video]] by Protesilaos Stavrou.
 
 * Contents                                                                 :TOC:
 - [[#features][Features]]
@@ -115,7 +115,7 @@ When transcripts are available in some form, which is most of the time, they can
 ** Putting it together
 Combined with the text manipulation capabilities of Emacs, you can combine these features into a very accessible video interface. You can handle video partially like you handle text:
 
-- You can narrow the buffer to just occurrences of a phrase in the transcript, then jump between where they appear. In this example I use =consult-focus-lines= to show only lines mentioning "Ramanujan", then jump through these points in the video by pressing ~RET~. Full-text video search!
+- Narrow the buffer to just occurrences of a phrase in the transcript, then jump between where they appear. In this example I use =consult-focus-lines= to show only lines mentioning "Ramanujan", then jump through these points in the video by pressing ~RET~. Full-text video search!
   
   #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172359973-b24e7a91-6384-44a2-b5fc-57d4d2f0e4aa.mp4"></video></p>
   
@@ -154,11 +154,12 @@ Dependencies will be automatically installed if you install Elfeed Tube using a 
   (use-package elfeed-tube
     :straight (:host github :repo "karthink/elfeed-tube")
     :after elfeed
+    :demand t
     :config
     ;; (setq elfeed-tube-auto-save-p nil) ;; t is auto-save (not default)
     ;; (setq elfeed-tube-auto-fetch-p t) ;;  t is auto-fetch (default)
     (elfeed-tube-setup)
-  
+
     :bind (:map elfeed-show-mode-map
            ("F" . elfeed-tube-fetch)
            ([remap save-buffer] . elfeed-tube-save)
@@ -166,6 +167,7 @@ Dependencies will be automatically installed if you install Elfeed Tube using a 
            ("F" . elfeed-tube-fetch)
            ([remap save-buffer] . elfeed-tube-save)))
 #+END_SRC
+Remove the =:straight= directive if you install it manually.
 
 If you want "live" captions and better MPV support:
 #+BEGIN_SRC emacs-lisp
@@ -248,38 +250,38 @@ Not all Youtube videos contain gems of wisdom, to put it mildly. You may thus wa
 
 To do this you can set
 #+BEGIN_SRC emacs-lisp
-(setq elfeed-tube-save-to-db-p nil)
+(setq elfeed-tube-auto-save-p nil)
 #+END_SRC
 
 Now Youtube entries you view will feature a =[*NOT SAVED*]= marker:
 
 #+html: <p align="center"><img src="media/elfeed-tube-not-saved.jpg"></p>
 
-The fetched info will be cached for this Emacs session. Entries that you deem useful (such as the handy Guix tutorial in this video) can be added to your Elfeed database by clicking on this marker, or with your =save-buffer= keybinding (typically ~C-x C-s~):
+The fetched info will be cached for this Emacs session. Entries that you deem useful (such as the handy Guix tutorial in the above entry) can be added to your Elfeed database by clicking on this marker, or with your =save-buffer= keybinding (typically ~C-x C-s~):
 
 #+html: <p align="center"><img src="media/elfeed-tube-now-saved.jpg"></p>
 
 You can change the marker style through =elfeed-tube-minimal-save-indicator-p= if you'd like a more subdued indicator.
 
 ** (Optional) Fetch manually
-Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch= (bound to ~F~) from an Elfeed Search or Show buffer to fetch selectively. To do this, remove =(elfeed-tube-setup)= from the setup code and replace it with
+Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch= (bound to ~F~) from an Elfeed Search or Show buffer to fetch selectively. To do this, set
 
 #+BEGIN_SRC emacs-lisp
-(elfeed-tube-setup-no-fetch)
+  (setq elfeed-tube-auto-fetch-p nil)
 #+END_SRC
 
-=elfeed-tube-fetch= will fetch info for all Youtube entries in a selected region in an Elfeed Search buffer.
+=M-x elfeed-tube-fetch= will fetch info for all Youtube entries in a selected region in an Elfeed Search buffer.
 
-You can mix and match auto/manual fetching and auto/manual saving of entries to the Elfeed database.
+You can independently control auto/manual fetching of info and auto/manual saving of info to the Elfeed database.
 
 * Customization
 Elfeed Tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
 
 ** Disabling fields
-Customize =elfeed-tube-metadata-fields=. To show only the duration and captions but no description or thumbnail:
+Customize =elfeed-tube-fields=. To show only the duration and captions but no description or thumbnail:
 #+BEGIN_SRC emacs-lisp
   ;; Other options:  thumbnail, description
-  (setq elfeed-tube-metadata-fields '(duration captions))
+  (setq elfeed-tube-fields '(duration captions))
 #+END_SRC
 
 ** Customizing fields
@@ -299,18 +301,18 @@ Control the size with =elfeed-tube-thumbnail-size=.
 - =elfeed-tube-caption-faces=: Faces to use for different types of transcript segments.
 
 ** Persistence
-Set the boolean =elfeed-tube-save-to-db-p= to =t= to automatically save fetched information to the Elfeed database.
+Set the boolean =elfeed-tube-auto-save-p= to =t= to automatically save fetched information to the Elfeed database.
 
 The boolean =elfeed-tube-minimal-save-indicator-p= controls the style of indicator used to indicate unsaved content.
 
 * FAQ
 *** Do I need a Youtube API key to use this?
 Not as of right now, it should *Just Work*.
-*** Where does elfeed-tube get its data from?
-Through a combination of sources:
+*** Where does Elfeed Tube get its data from?
+It combines information from a number of sources:
 - Scraping the Youtube video page
 - Invidious instances that provide an API (dynamically found)
-- The Sponsorblock API for crowd-sourced ad segment identification
+- The Sponsorblock API for crowd-sourced Ad segment identification
 
 Yes, this does mean that the fetcher code is going to need updating often. Them's the breaks.
 *** Can I use the transcripts feature without using Elfeed?
@@ -329,13 +331,13 @@ Elfeed Tube is *not* a Youtube client for Emacs.
 
 Instead, it plays to the strengths of RSS: to provide you with a regular digest of self-curated content in a more accessible way than otherwise possible. So search is not planned (see alternatives).
 
-Video recommendations are sometimes useful for discovery, but in their current form they're designed primarily to keep you watching Youtube and often end in rabbit-holeing and doom spirals. Helping myself avoid these behaviors is an explicit goal of elfeed-tube!
+Video recommendations are sometimes useful for discovery, but in their current form they're designed primarily to keep you watching Youtube and often end in rabbit-holeing and doom spirals. Helping myself avoid these behaviors is an explicit goal of Elfeed Tube!
 
-The top comments are occasionally useful, especially on technical videos. I might add support for these in the future, although none are planned as of now.
+The top comments are occasionally useful, especially on technical videos. I might add support for these in the future, although none is planned as of now.
 
 * Limitations
-1. Elfeed provides only metadata, not full-text search acrosss your entries since it is (almost) a plain text database.
-2. While Elfeed is an aggregator, Youtube RSS feeds only contain the last dozen or so videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed, unless you can find feeds that include older content.
+1. Elfeed provides only metadata, not full-text search across your entries since it is (almost) a plain text database.
+2. While Elfeed is a vault, Youtube RSS feeds only contain the last dozen or so videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed, unless you can find feeds that include older content.
 3. There is no (user-facing) way to delete entries from an Elfeed database, so curate wisely! Note that my Elfeed database has about 32,000 entries across 272 feeds and it's very snappy so far.
 4. Only one MPV instance can be connected to a live transcript in an Emacs session at a time. This is a limitation of the =mpv= library. (You can spawn as many "non-live" instances as you want.)
 5. Live transcript seeking and tracking can have an error of ±1 second.
@@ -355,7 +357,7 @@ The top comments are occasionally useful, especially on technical videos. I migh
   + [[https://github.com/AN3223/dotfiles/blob/master/.config/mpv/scripts/auto-save-state.lua][auto-save-state]] for built-in watch-later functionality
   + [[https://github.com/jonniek/mpv-playlistmanager][playlist-manager]] for playlist support
   + [[https://github.com/Eisa01/mpv-scripts#undoredo][undo-redo]] for undo/redoing seeks in MPV
-  + [[https://github.com/Sagnac/streamsave][streamsave]] for saving clips from a video live, without reencoding.
+  + [[https://github.com/Sagnac/streamsave][streamsave]] for live-saving clips from a video without reencoding.
   + [[https://github.com/cvzi/mpv-youtube-upnext][youtube-upnext]] for in-player video recommendations based on the current video. (Youtube's sidebar, essentially.)
   [[https://github.com/mpv-player/mpv/wiki/User-Scripts][The full list]] of scripts is overwhelming!
   

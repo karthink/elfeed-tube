@@ -2,8 +2,13 @@
 
 ;; Copyright (C) 2022  Karthik Chikmagalur
 
-;; Author: Karthik Chikmagalur <karthikchikmagalur@gmail.com>
+;; Author: Karthik Chikmagalur <karthik.chikmagalur@gmail.com>
+;; Version: 0.10
+;; Package-Requires: ((emacs "27.1") (elfeed "3.4.1") (aio "1.0"))
 ;; Keywords: news, hypermedia, convenience
+;; URL: https://github.com/karthink/elfeed-tube
+
+;; This file is NOT part of GNU Emacs.
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -19,37 +24,8 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
-;; TODO Rename variables consistently
-;; - description to desc everywhere
-;; - caption/captions to captions everywhere
-;; - thumbnail to thumb everywhere
-;; - duration stays as duration
-;; - 'elfeed-tube-timestamp text-prop to just 'timestamp
-;; - urls/servers/url/server: pick something
 ;;
-;; TODO Simplify the customization options:
-;; - elfeed-tube-auto-save-p: save to DB when fetching?
-;; - elfeed-tube-auto-fetch-p: fetch when updating elfeed or opening entires?
-;; 
-;; TODO Separate elfeed-tube-mpv, so it doesn't need to be loaded. Only the
-;; keymaps will have to be accounted for somehow.
 ;;
-;; TODO Separate into the following libraries
-;; - elfeed-tube:
-;;   main fetcher (elfeed-tube-fetch),
-;;   main inserter (elfeed-tube-show),
-;;   main saver (elfeed-tube-save)
-;; - elfeed-tube-captions: caption functions (fetch, insert)
-;; - elfeed-tube-desc: metadata functions (fetch desc, thumb, duration, insert)
-;; - elfeed-tube-mpv: mpv integration (minor mode, tracking)
-;; - elfeed-tube-show? (display functions)
-;; - elfeed-tube-test: tests
-;; - elfeed-tube-utils: feed finder, misc functions, general fetcher
-;;
-;; TODO elfeed-tube-mpv:
-;; - separate mpv args, make user option
-
 ;;; Code:
 (require 'elfeed)
 (require 'cl-lib)
@@ -66,9 +42,9 @@
   :group 'elfeed
   :prefix "elfeed-tube-")
 
-(defcustom elfeed-tube-metadata-fields
+(defcustom elfeed-tube-fields
   '(duration thumbnail description captions)
-  "Metadata types to fetch for youtube entries in Elfeed.
+  "Metadata fields to fetch for youtube entries in Elfeed.
 
 This is a list of symbols. The ordering is not relevant.
 
@@ -92,8 +68,9 @@ To set caption language(s), see `elfeed-tube-captions-languages'."
 (defcustom elfeed-tube-thumbnail-size 'small
   "Video thumbnail size to show in the Elfeed buffer.
 
-Choices are LARGE, MEDIUM and SMALL.
-Set this to NIL to disable showing thumbnails."
+Choices are LARGE, MEDIUM and SMALL. Setting this to NIL to
+disable showing thumbnails, but customize `elfeed-tube-fields'
+for that instead."
   :group 'elfeed-tube
   :type '(choice (const :tag "No thumbnails" nil)
                  (const :tag "Large thumbnails" large)
@@ -140,11 +117,18 @@ When set to true, elfeed-tube will use a minimal indicator next
 to theb title."
   :group 'elfeed-tube
   :type  'boolean)
-(defcustom elfeed-tube-save-to-db-p nil
+(defcustom elfeed-tube-auto-save-p nil
   "Save information fetched by elfeed-tube to the Elfeed databse.
 
 This is a boolean. Fetched information is automatically saved
 when this is set to true."
+  :group 'elfeed-tube
+  :type 'boolean)
+
+(defcustom elfeed-tube-auto-fetch-p t
+  "Fetch information automatically when updating Elfeed or opening entries.
+
+This is a boolean. When set to T, video information will be fetched automatically when updating Elfeed or opening video entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
@@ -201,7 +185,7 @@ when this is set to true."
 
 ;; Helpers
 (defsubst elfeed-tube-include-p (field)
-  (memq field elfeed-tube-metadata-fields))
+  (memq field elfeed-tube-fields))
 
 (defsubst elfeed-tube--get-entries ()
   (pcase major-mode
@@ -287,7 +271,7 @@ when this is set to true."
     (elfeed-tube-item (:constructor elfeed-tube-item--create)
                       (:copier nil))
   "Struct to hold elfeed-tube metadata."
-  length thumb desc caption error)
+  len thumb desc caps error)
 
 ;; Persistence
 (defun elfeed-tube--write-db (entry &optional data-item)
@@ -300,14 +284,14 @@ when this is set to true."
               (elfeed-ref desc))))
     (when (elfeed-tube-include-p 'duration)
       (setf (elfeed-meta entry :duration)
-            (elfeed-tube-item-length data-item)))
+            (elfeed-tube-item-len data-item)))
     (when (elfeed-tube-include-p 'thumbnail)
-      (setf (elfeed-meta entry :thumbnail)
+      (setf (elfeed-meta entry :thumb)
             (elfeed-tube-item-thumb data-item)))
     (when (elfeed-tube-include-p 'captions)
       (elfeed-tube--with-db elfeed-tube--captions-db-dir
-        (setf (elfeed-meta entry :caption)
-              (when-let ((caption (elfeed-tube-item-caption data-item)))
+        (setf (elfeed-meta entry :caps)
+              (when-let ((caption (elfeed-tube-item-caps data-item)))
                 (elfeed-ref (prin1-to-string caption))))))
     (elfeed-tube-log 'info "[DB][Wrote to DB][video:%s]"
                      (elfeed-tube--truncate (elfeed-entry-title entry)))
@@ -400,7 +384,7 @@ when this is set to true."
           ;; Duration
           (if-let ((_ (elfeed-tube-include-p 'duration))
                    (duration
-                    (or (and data-item (elfeed-tube-item-length data-item))
+                    (or (and data-item (elfeed-tube-item-len data-item))
                         (elfeed-meta entry :duration))))
               (elfeed-tube--insert-duration entry duration)
             (forward-line 1))
@@ -409,9 +393,9 @@ when this is set to true."
           (when (or (and data-item (elfeed-tube-item-desc data-item)
                          (not (elfeed-entry-content entry)))
                     (and data-item (elfeed-tube-item-thumb data-item)
-                         (not (elfeed-meta entry :thumbnail)))
-                    (and data-item (elfeed-tube-item-caption data-item)
-                         (not (elfeed-meta entry :caption))))
+                         (not (elfeed-meta entry :thumb)))
+                    (and data-item (elfeed-tube-item-caps data-item)
+                         (not (elfeed-meta entry :caps))))
             (let ((prop-list
                    `(face (:inherit warning :weight bold) mouse-face highlight
                           help-echo "mouse-1: save this entry to the elfeed-db"
@@ -426,9 +410,9 @@ when this is set to true."
           ;; Thumbnail
           (when-let ((_ (elfeed-tube-include-p 'thumbnail))
                      (thumb (or (and data-item (elfeed-tube-item-thumb data-item))
-                                (elfeed-meta entry :thumbnail))))
+                                (elfeed-meta entry :thumb))))
             (elfeed-insert-html (elfeed-tube--thumbnail-html thumb))
-            (push 'thumbnail insertions))
+            (push 'thumb insertions))
           
           ;; Description
           (delete-region (point) (point-max))
@@ -436,26 +420,26 @@ when this is set to true."
             (if-let ((desc (or (and data-item (elfeed-tube-item-desc data-item))
                                (elfeed-deref (elfeed-entry-content entry)))))
                 (progn (elfeed-insert-html (concat desc "") base)
-                       (push 'description insertions))))
+                       (push 'desc insertions))))
           
           ;; Captions
           (elfeed-tube--with-db elfeed-tube--captions-db-dir
             (when-let* ((_ (elfeed-tube-include-p 'captions))
                       (caption
-                       (or (and data-item (elfeed-tube-item-caption data-item))
+                       (or (and data-item (elfeed-tube-item-caps data-item))
                            (and (when-let
                                     ((capstr (elfeed-deref
-                                              (elfeed-meta entry :caption))))
+                                              (elfeed-meta entry :caps))))
                                   (condition-case nil
                                       (read capstr)
                                     ('error
                                      (elfeed-tube-log
                                       'error "[Show][Captions] DB parse error: %S"
-                                      (elfeed-meta entry :caption)))))))))
+                                      (elfeed-meta entry :caps)))))))))
               (when (not (elfeed-entry-content entry))
                 (kill-region (point) (point-max)))
               (elfeed-tube--insert-captions caption)
-              (push 'captions insertions)))
+              (push 'caps insertions)))
           
           (if insertions
               (delete-region (point) (point-max))
@@ -526,7 +510,7 @@ when this is set to true."
                     (string-join
                      (mapcar (lambda (tx-cons)
                                (propertize (cdr tx-cons)
-                                           'elfeed-tube-timestamp
+                                           'timestamp
                                            (car tx-cons)
                                            'mouse-face
                                            'highlight
@@ -553,14 +537,15 @@ when this is set to true."
   (concat
    (let ((type (get-text-property pos 'type))
          (time (elfeed-tube--timestamp
-                (get-text-property pos 'elfeed-tube-timestamp))))
+                (get-text-property pos 'timestamp))))
      (when (not (eq type 'text))
        (format "segment: %s\n\n" (symbol-name type)))
      (format "mouse-1: open video at %s (mpv)\nmouse-2: open video at %s (web browser)" time time))))
 
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)
-  (elfeed-tube--fetch-1 (or entry elfeed-show-entry)))
+  (when elfeed-tube-auto-fetch-p
+    (elfeed-tube--fetch-1 (or entry elfeed-show-entry))))
 
 (defun elfeed-tube-setup ()
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
@@ -569,17 +554,6 @@ when this is set to true."
   (advice-add elfeed-show-refresh-function
               :after #'elfeed-tube-show)
   t)
-
-(defun elfeed-tube-setup-no-fetch ()
-  "Set up elfeed-tube to show youtube data.
-
-Running this will only show data in the Elfeed database, without
-fetching it from the Internet."
-  (advice-add elfeed-show-refresh-function
-              :after #'elfeed-tube-show)
-  t)
-
-;; (advice-add elfeed-show-refresh-function :after #'elfeed-tube-show)
 
 (defun elfeed-tube-teardown ()
   (advice-remove elfeed-show-refresh-function #'elfeed-tube-show)
@@ -845,7 +819,7 @@ The result is a plist with the following keys:
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
   (when (elfeed-tube--youtube-p entry)
     (let* ((cached (elfeed-tube--gethash entry))
-           description thumb duration captions errors)
+           desc thumb duration caps error)
       
       ;; When to fetch a field:
       ;; - force-fetch is true: always fetch
@@ -861,13 +835,13 @@ The result is a plist with the following keys:
                  (or force-fetch
                      (not (or (and cached
                                    (or (cl-intersection
-                                        '(description duration thumbnail)
+                                        '(desc duration thumb)
                                         (elfeed-tube-item-error cached))
-                                       (elfeed-tube-item-length cached)
+                                       (elfeed-tube-item-len cached)
                                        (elfeed-tube-item-desc cached)
                                        (elfeed-tube-item-thumb cached)))
                               (or (elfeed-entry-content entry)
-                                  (elfeed-meta entry :thumbnail)
+                                  (elfeed-meta entry :thumb)
                                   (elfeed-meta entry :duration))))))
         (if-let ((api-data
                   (aio-await (elfeed-tube--fetch-desc entry))))
@@ -876,57 +850,50 @@ The result is a plist with the following keys:
                 (setf thumb
                       (plist-get api-data :thumb)))
               (when (elfeed-tube-include-p 'description)
-                (setf description
+                (setf desc
                       (plist-get api-data :desc)))
               (when (elfeed-tube-include-p 'duration)
                 (setf duration
                       (plist-get api-data :length))))
-          (setq errors (append errors '(description duration thumbnail)))))
+          (setq error (append error '(desc duration thumb)))))
 
       ;; Record captions
       (when (and (elfeed-tube-include-p 'captions)
                  (or force-fetch
                      (not (or (and cached
-                                   (or (elfeed-tube-item-caption cached)
-                                       (memq 'captions (elfeed-tube-item-error cached))))
+                                   (or (elfeed-tube-item-caps cached)
+                                       (memq 'caps (elfeed-tube-item-error cached))))
                               (elfeed-ref-p
-                               (elfeed-meta entry :caption))))))
-        (if-let ((caption-new
+                               (elfeed-meta entry :caps))))))
+        (if-let ((caps-new
                   (aio-await (elfeed-tube--fetch-captions entry))))
-            (setf captions caption-new)
-          (push 'captions errors)))
+            (setf caps caps-new)
+          (push 'caps error)))
 
-      ;; (with-current-buffer (get-buffer-create "fetch-test.el")
-      ;;   (erase-buffer)
-      ;;   (cl-loop for s in (list duration thumb description captions)
-      ;;            do (prin1 s (current-buffer))
-      ;;            do (insert "\n")
-      ;;            finally (display-buffer (current-buffer))))
-      
-      (if (and elfeed-tube-save-to-db-p
-               (or duration captions description thumb))
+      (if (and elfeed-tube-auto-save-p
+               (or duration caps desc thumb))
           ;; Store in db
           (progn (elfeed-tube--write-db
                   entry
                   (elfeed-tube-item--create
-                   :length duraion :desc description :thumb thumb
-                   :caption captions))
+                   :len duraion :desc desc :thumb thumb
+                   :caps caps))
                  (elfeed-tube-log
                   'info "Saved to elfeed-db: %s"
                   (elfeed-entry-title entry)))
         ;; Store in session cache
-        (when (or duration captions description thumb errors)
+        (when (or duration caps desc thumb error)
           (elfeed-tube--puthash
            entry
            (elfeed-tube-item--create
-            :length duration :desc description :thumb thumb
-            :caption captions :error errors)
+            :len duration :desc desc :thumb thumb
+            :caps caps :error error)
            force-fetch))))))
 
 ;; Interaction
 (defun elfeed-tube--browse-at-time (pos)
   (interactive "d")
-  (when-let ((time (get-text-property pos 'elfeed-tube-timestamp)))
+  (when-let ((time (get-text-property pos 'timestamp)))
     (browse-url (concat "https://youtube.com/watch?v="
                         (elfeed-tube--get-video-id elfeed-show-entry)
                         "&t="
@@ -945,13 +912,13 @@ With optional prefix argument FORCE-FETCH, force refetching of
 the metadata for ENTRIES.
 
 If you want to always add this metadata to the database, consider
-setting `elfeed-tube-save-to-db-p'. To customize what kinds of
+setting `elfeed-tube-auto-save-p'. To customize what kinds of
 metadata are fetched, customize TODO
-`elfeed-tube-metadata-fields'."
+`elfeed-tube-fields'."
   (interactive (list (elfeed-tube--get-entries)
                      current-prefix-arg))
-  (if (not elfeed-tube-metadata-fields)
-      (message "Nothing to fetch! Customize `elfeed-tube-metadata-fields'.")
+  (if (not elfeed-tube-fields)
+      (message "Nothing to fetch! Customize `elfeed-tube-fields'.")
     (dolist (entry (ensure-list entries))
       (aio-await (elfeed-tube--fetch-1 entry force-fetch))
       (elfeed-tube-show entry))))

@@ -41,7 +41,7 @@ entry.")
   (interactive "d")
   (if (not elfeed-tube--mpv-available-p)
       (message "Could not find mpv + youtube-dl/yt-dlp in PATH.")
-    (when-let* ((time (get-text-property pos 'elfeed-tube-timestamp))
+    (when-let* ((time (get-text-property pos 'timestamp))
                 (video-id (elfeed-tube--get-video-id elfeed-show-entry))
                 (video-url (concat "https://youtube.com/watch?v="
                                    video-id
@@ -86,7 +86,7 @@ entry.")
 			   (save-excursion
 			     (beginning-of-buffer)
 			     (text-property-search-forward
-			      'elfeed-tube-timestamp)
+			      'timestamp)
 			     (setq elfeed-tube-mpv--overlay
 				   (make-overlay (point) (point)))
 			     (overlay-put elfeed-tube-mpv--overlay
@@ -99,11 +99,11 @@ entry.")
                                (goto-char (point-min))
                                (setq beg (prop-match-value
                                           (text-property-search-forward
-                                           'elfeed-tube-timestamp)))
+                                           'timestamp)))
                                (goto-char (point-max))
                                (setq end (prop-match-value
                                           (text-property-search-backward
-                                           'elfeed-tube-timestamp)))
+                                           'timestamp)))
                                (cond
                                 ((and beg (< mpv-time beg))
                                  (print "beg" (get-buffer "*scratch*"))
@@ -123,27 +123,27 @@ entry.")
 
 (defun elfeed-tube-mpv--where-internal (mpv-time)
   (save-excursion 
-      (while (not (get-text-property (point) 'elfeed-tube-timestamp))
+      (while (not (get-text-property (point) 'timestamp))
         (goto-char (or (previous-single-property-change
-		        (point) 'elfeed-tube-timestamp)
+		        (point) 'timestamp)
 		       (next-single-property-change
-		        (point) 'elfeed-tube-timestamp))))
+		        (point) 'timestamp))))
 
-      (if (> (get-text-property (point) 'elfeed-tube-timestamp)
+      (if (> (get-text-property (point) 'timestamp)
 	     mpv-time)
 	  (let ((match (text-property-search-backward
-		        'elfeed-tube-timestamp mpv-time
+		        'timestamp mpv-time
 		        (lambda (mpv cur)
 			  (< (or cur
 			         (get-text-property
 				  (1+ (point))
-				  'elfeed-tube-timestamp))
+				  'timestamp))
 			     (- mpv 1))))))
 	    (goto-char (prop-match-end match))
-	    (text-property-search-forward 'elfeed-tube-timestamp)
+	    (text-property-search-forward 'timestamp)
 	    (min (1+ (point)) (point-max)))
         (let ((match (text-property-search-forward
-		      'elfeed-tube-timestamp mpv-time
+		      'timestamp mpv-time
 		      (lambda (mpv cur) (if cur (> cur (- mpv 1)))))))
           (prop-match-beginning match)))))
 
@@ -159,15 +159,15 @@ entry.")
    ((not (mpv-live-p))
     (message "No running instance of mpv is connected to Emacs."))
    ((or (previous-single-property-change
-	 (point) 'elfeed-tube-timestamp)
+	 (point) 'timestamp)
 	(next-single-property-change
-	 (point) 'elfeed-tube-timestamp))
+	 (point) 'timestamp))
     (goto-char (elfeed-tube-mpv--where-internal
                 (mpv-get-property "time-pos")))
     (let ((pulse-delay 0.08)
           (pulse-iterations 16))
       (pulse-momentary-highlight-one-line))
-   (t (message "Transcript location not found in buffer."))))
+   (t (message "Transcript location not found in buffer.")))))
 
 (define-minor-mode elfeed-tube-mpv-follow-mode
   "Toggle mpv follow mode in elfeed-show buffers that display
