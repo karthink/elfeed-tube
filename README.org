@@ -4,7 +4,9 @@ Elfeed Tube is an Emacs package for a richer, interactive, noise-free and fully 
 
 Elfeed Tube adds video descriptions, metadata and "live" transcripts (see below) for all Youtube video entries in Elfeed. Here is what a video entry looks like:
 
+# https://imgur.com/a/taiMOqG
 #+html: <p align="center"><img src="media/elfeed-tube-1.jpg"></p>
+([[https://i.imgur.com/nFK0n3m.png][Higher quality version]])
 
 Here is the same Youtube video entry in Elfeed without Elfeed Tube:
 
@@ -52,12 +54,11 @@ Elfeed Tube adds the video duration, thumbnail and the video description to each
 
 For example, you may prefer to avoid including video descriptions because they often have linkspam, or prefer larger thumbnails.
 
-** Transcripts
+* Transcripts
 
 Youtube transcripts, including auto-generated ones, are automatically downloaded in your language of choice, formatted and displayed in your Elfeed buffers:
 
-| English |
-| Arabic  |
+#+html: <p align="center" width="100%"> <img src="media/elfeed-tube-captions-ar.jpg" width="50%"></img><img src="media/elfeed-tube-captions-en.jpg" width="50%"></img></p>
 
 These transcripts are:
 ** Noise-free text (No Ad reads)
