@@ -68,9 +68,9 @@ To set caption language(s), see `elfeed-tube-captions-languages'."
 (defcustom elfeed-tube-thumbnail-size 'small
   "Video thumbnail size to show in the Elfeed buffer.
 
-Choices are LARGE, MEDIUM and SMALL. Setting this to NIL to
-disable showing thumbnails, but customize `elfeed-tube-fields'
-for that instead."
+This is a symbol. Choices are large, medium and small. Setting
+this to nil to disable showing thumbnails, but customize
+`elfeed-tube-fields' for that instead."
   :group 'elfeed-tube
   :type '(choice (const :tag "No thumbnails" nil)
                  (const :tag "Large thumbnails" large)
@@ -101,8 +101,11 @@ elfeed-tube when fetching information."
 
 Captions in the first available langauge in this list will be
 fetched. Each entry (string) in the list can be a
-language (case-insensitive, \"english\") or language codes: -
-\"en\" for English - \"tr\" for Turkish - \"ar\" for Arabic, etc
+language (case-insensitive, \"english\") or language codes:
+
+- \"en\" for English
+- \"tr\" for Turkish
+- \"ar\" for Arabic, etc
 
 Example:
 (\"tr\" \"english\" \"arabic\" \"es\" \"english (auto generated)\")
@@ -114,7 +117,7 @@ Example:
   "Style of indication that entry information is unsaved.
 
 When set to true, elfeed-tube will use a minimal indicator next
-to theb title."
+to the title."
   :group 'elfeed-tube
   :type  'boolean)
 (defcustom elfeed-tube-auto-save-p nil
@@ -128,7 +131,7 @@ when this is set to true."
 (defcustom elfeed-tube-auto-fetch-p t
   "Fetch information automatically when updating Elfeed or opening entries.
 
-This is a boolean. When set to T, video information will be fetched automatically when updating Elfeed or opening video entries that don't have metadata."
+This is a boolean. When set to t, video information will be fetched automatically when updating Elfeed or opening video entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
@@ -140,7 +143,7 @@ This is a boolean. When set to T, video information will be fetched automaticall
 (defvar elfeed-tube--sblock-url "https://sponsor.ajay.app")
 (defvar elfeed-tube--sblock-api-path "/api/skipSegments")
 (defcustom elfeed-tube-captions-sblock-p t
-  "Whether sponsored segments should be de-emphasizes in transcripts."
+  "Whether sponsored segments should be de-emphasized in transcripts."
   :group 'elfeed-tube
   :type 'boolean)
 (defvar elfeed-tube-captions-puntcuate-p t)
@@ -545,7 +548,9 @@ This is a boolean. When set to T, video information will be fetched automaticall
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)
   (when elfeed-tube-auto-fetch-p
-    (elfeed-tube--fetch-1 (or entry elfeed-show-entry))))
+    (aio-listen 
+     (elfeed-tube--fetch-1 (or entry elfeed-show-entry))
+     (lambda (_) (elfeed-tube-show (or entry elfeed-show-entry))))))
 
 (defun elfeed-tube-setup ()
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
