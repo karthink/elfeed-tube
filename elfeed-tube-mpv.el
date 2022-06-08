@@ -2,6 +2,22 @@
 
 (require 'pulse)
 
+(defcustom elfeed-tube-mpv-options
+  '("--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
+    "--cache=yes"
+    ;; "--script-opts=osc-scalewindowed=2,osc-visibility=always"
+    )
+  "List of command line arguments to pass to mpv.
+
+If the mpv library is available, these are appended to
+mpv-default-options. Otherwise mpv is started with these options.
+
+Each element in this list is a string. Examples:
+- \"--cache=yes\"
+- \"--osc=no\""
+  :group 'elfeed-tube
+  :type '(repeat string))
+
 (defvar elfeed-tube--mpv-available-p
   (and (executable-find "mpv")
        (or (executable-find "youtube-dl")
@@ -9,7 +25,7 @@
 (defvar-local elfeed-tube-mpv--follow-p nil)
 (defvar elfeed-tube-mpv--follow-timer nil)
 (defvar-local elfeed-tube-mpv--overlay nil)
-(defvar elfeed-tube-mpv-play-hook nil
+(defvar elfeed-tube-mpv-hook nil
   "Hook run before starting mpv playback in an elfeed-show buffer.
 
 Each function must accept one argument, the current Elfeed
@@ -37,34 +53,45 @@ entry.")
          (when (overlayp elfeed-tube-mpv--overlay)
            (delete-overlay elfeed-tube-mpv--overlay))))
 
-(defun elfeed-tube-mpv-play (pos)
-  (interactive "d")
+(defun elfeed-tube-mpv (pos &optional arg)
+  (interactive (list (point)
+                     current-prefix-arg))
   (if (not elfeed-tube--mpv-available-p)
       (message "Could not find mpv + youtube-dl/yt-dlp in PATH.")
-    (when-let* ((time (get-text-property pos 'timestamp))
+    (when-let* ((time (or (get-text-property pos 'timestamp) 0))
                 (video-id (elfeed-tube--get-video-id elfeed-show-entry))
                 (video-url (concat "https://youtube.com/watch?v="
                                    video-id
                                    "&t="
                                    (number-to-string (floor time))))
-                (args `("--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
-                        "--cache=yes"
-                        "--script-opts=osc-scalewindowed=2,osc-visibility=always"
-                        ,video-url))
-                (entry elfeed-show-entry))
-      (run-hook-with-args 'elfeed-tube-mpv-play-hook entry)
+                (args (append elfeed-tube-mpv-options (list video-url)))
+                (entry (or elfeed-show-entry
+                           (elfeed-search-selected 'ignore-region))))
+      (run-hook-with-args 'elfeed-tube-mpv-hook entry)
       ;; (pulse-momentary-highlight-one-line)
-      (if (require 'mpv nil t)
-          (if (and (mpv-live-p)
-                   (elfeed-tube-mpv--check-path video-url))
-              (mpv-seek time)
+      (if (and (not arg) (require 'mpv nil t))
+          (if (mpv-live-p)
+              (if (elfeed-tube-mpv--check-path video-url)
+                  (unless (= 0 time)
+                    (mpv-seek time))
+                (mpv--enqueue `("loadfile" ,video-url "append")
+                              #'ignore)
+                (message "Added to playlist: %s"
+                         (elfeed-entry-title entry)))
             (apply #'mpv-start args)
+            (message
+             (concat "Starting mpv: "
+                     (propertize "Connected to Elfeed ✓"
+                                 'face 'success)))
             (when elfeed-tube-mpv--follow-p
               (elfeed-tube-mpv--set-timer entry)))
         (apply #'start-process
                (concat "elfeed-tube-mpv-"
                        (elfeed-tube--get-video-id elfeed-show-entry))
-               nil "mpv" args)))))
+               nil "mpv" args)
+        (message (concat "Starting new mpv instance: "
+                         (propertize "Not connected to Elfeed ❌"
+                                     'face 'error)))))))
 
 (defun elfeed-tube-mpv--follow (entry-playing)
   (if (not (mpv-live-p))

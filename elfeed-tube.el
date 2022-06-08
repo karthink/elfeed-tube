@@ -170,9 +170,9 @@ This is a boolean. When set to t, video information will be fetched automaticall
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-2] (elfeed-tube-captions-browse-with
                                #'elfeed-tube--browse-at-time))
-    (define-key map (kbd "RET") #'elfeed-tube-mpv-play)
+    (define-key map (kbd "RET") #'elfeed-tube-mpv)
     (define-key map [mouse-1] (elfeed-tube-captions-browse-with
-                               #'elfeed-tube-mpv-play))
+                               #'elfeed-tube-mpv))
     map))
 
 (defvar elfeed-tube-caption-faces
@@ -553,7 +553,9 @@ This is a boolean. When set to t, video information will be fetched automaticall
   (when elfeed-tube-auto-fetch-p
     (aio-listen 
      (elfeed-tube--fetch-1 (or entry elfeed-show-entry))
-     (lambda (_) (elfeed-tube-show (or entry elfeed-show-entry))))))
+     (lambda (fetched-p)
+       (when (funcall fetched-p)
+         (elfeed-tube-show (or entry elfeed-show-entry)))))))
 
 (defun elfeed-tube-setup ()
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
@@ -896,7 +898,9 @@ The result is a plist with the following keys:
            (elfeed-tube-item--create
             :len duration :desc desc :thumb thumb
             :caps caps :error error)
-           force-fetch))))))
+           force-fetch)))
+      ;; Return t if something was fetched
+      (and (or duration caps desc thumb) t))))
 
 ;; Interaction
 (defun elfeed-tube--browse-at-time (pos)
