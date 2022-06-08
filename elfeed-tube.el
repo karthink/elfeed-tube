@@ -368,7 +368,10 @@ This is a boolean. When set to t, video information will be fetched automaticall
 ;; Content display
 (defun elfeed-tube-show (&optional intended-entry)
   "Show extra video information in an elfeed-show buffer."
-  (when-let* ((show-buf (get-buffer "*elfeed-entry*"))
+  (when-let* ((show-buf
+               (if intended-entry
+                   (get-buffer (elfeed-show--buffer-name intended-entry))
+                 (current-buffer)))
               (entry (buffer-local-value 'elfeed-show-entry show-buf))
               (intended-entry (or intended-entry entry)))
     (when (elfeed-tube--same-entry-p entry intended-entry)
