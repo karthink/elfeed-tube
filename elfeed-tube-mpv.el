@@ -95,21 +95,23 @@ entry.")
                          ;; Handle narrowed buffers
                          (when (buffer-narrowed-p)
                            (save-excursion
-                             (let (beg end)
-                               (goto-char (point-min))
+                             (let ((min (point-min))
+                                   (max (point-max))
+                                   beg end)
+                               (goto-char min)
                                (setq beg (prop-match-value
                                           (text-property-search-forward
                                            'timestamp)))
-                               (goto-char (point-max))
+                               (goto-char max)
+                               (widen)
                                (setq end (prop-match-value
-                                          (text-property-search-backward
+                                          (text-property-search-forward
                                            'timestamp)))
+                               (narrow-to-region min max)
                                (cond
                                 ((and beg (< mpv-time beg))
-                                 (print "beg" (get-buffer "*scratch*"))
                                  (mpv-set-property "time-pos" (1- beg)))
                                 ((and end (> mpv-time end))
-                                 (print "end" (get-buffer "*scratch*"))
                                  (mpv-set-property "time-pos" (1+ end))
                                  (mpv-set-property "pause" t))))))
                          
