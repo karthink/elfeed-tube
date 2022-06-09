@@ -59,6 +59,7 @@ For example, you may prefer to avoid including video descriptions because they o
 Youtube transcripts, including auto-generated ones, are automatically downloaded in your language of choice, formatted and displayed in your Elfeed buffers:
 
 #+html: <p align="center" width="100%"> <img src="media/elfeed-tube-captions-ar.jpg" width="50%"></img><img src="media/elfeed-tube-captions-en.jpg" width="50%"></img></p>
+#+html: <p align="center" width="100%"> <img src="https://user-images.githubusercontent.com/8607532/172851529-36fc092b-37bd-41d5-aa5d-4ee2ce169c39.jpg" width="50%"></img><img src="https://user-images.githubusercontent.com/8607532/172851684-547beab6-78b9-40f3-9c19-72201f9c89ac.jpg" width="50%"></img></p>
 
 These transcripts are:
 ** Noise-free text (No Ad reads)
