@@ -182,6 +182,9 @@ This is a boolean. When set to t, video information will be fetched automaticall
     (define-key map (kbd "RET") #'elfeed-tube-mpv)
     (define-key map [mouse-1] (elfeed-tube-captions-browse-with
                                #'elfeed-tube-mpv))
+    (define-key map (kbd "C-<down-mouse-1>")
+      (elfeed-tube-captions-browse-with
+       (lambda (pos) (elfeed-tube-mpv pos t))))
     map))
 
 (defvar elfeed-tube-caption-faces
@@ -566,7 +569,8 @@ This is a boolean. When set to t, video information will be fetched automaticall
                 (get-text-property pos 'timestamp))))
      (when (not (eq type 'text))
        (format "segment: %s\n\n" (symbol-name type)))
-     (format "mouse-1: open video at %s (mpv)\nmouse-2: open video at %s (web browser)" time time))))
+     (format
+      "  mouse-1: open at %s (mpv)\n  mouse-2: open at %s (web browser)\nC-mouse-1: open at %s (mpv, new instance)" time time time))))
 
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)

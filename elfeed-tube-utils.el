@@ -401,7 +401,8 @@ This function returns a promise.
                      (elfeed-entry-title entry))
             (setq-local elfeed-show-refresh-function
                         (lambda () (interactive)
-                          (elfeed-tube-show))))))
+                          (elfeed-tube-show))
+                        elfeed-tube-save-indicator nil))))
     (message "Not a youtube video URL, aborting.")))
 
 (provide 'elfeed-tube-utils)

@@ -33,8 +33,9 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
   - [[#step-ii-use-elfeed-as-usual][Step II: Use Elfeed as usual]]
   - [[#commands-summary][Commands summary]]
   - [[#optional-for-live-captions-with-mpv][(Optional) For "Live" captions with MPV]]
-  - [[#optional-preview-entries-and-save-manually][(Optional) Preview entries and save manually]]
+  - [[#optional-view-entries-instead-of-auto-saving-them][(Optional) View entries instead of auto-saving them]]
   - [[#optional-fetch-manually][(Optional) Fetch manually]]
+  - [[#optional-elfeed-tube-for-any-video][(Optional) Elfeed Tube for any video]]
 - [[#customization][Customization]]
   - [[#disabling-fields][Disabling fields]]
   - [[#customizing-fields][Customizing fields]]
@@ -73,34 +74,36 @@ There are no sponsor reads, ads or promotions in the transcript. These are autom
 You can turn this feature off, or add more recognized sections to the strike-list, like intros and outros.
 
 ** Interactive
-Clicking on a segment opens the video at that time in your browser or video player of choice:
+Clicking on a transcript segment opens the video at that time in your browser or video player of choice:
 
 #+html: <p align="center"><img src="media/elfeed-tube-caption.png" width="80%"></p>
 
-You can also move your cursor there and press return. The tool-tip provides more help.
+You can also move your cursor there and press return (~RET~). The tool-tip provides more help.
 ** "Live"
-- With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer:
+With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer:
 
-  #+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4"></video></p>
+#+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4"></video></p>
 # https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4
 
-- You can jump in Emacs to the current video position with =elfeed-tube-mpv-where= (~C-c C-w~):
+You can jump in Emacs to the current video position with =elfeed-tube-mpv-where= (~C-c C-w~):
 
-  #+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172330220-1948bae0-f7c4-447a-bdeb-2112401ad876.mp4"></video></p>
+#+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172330220-1948bae0-f7c4-447a-bdeb-2112401ad876.mp4"></video></p>
 
-- Finally, you can also follow along with the video in Emacs:
+Finally, you can also follow along with the video in Emacs:
 
-  # #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172347599-8f5fc73c-2229-4292-9815-3b477dce83c2.mp4"></video></p>
+# #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172347599-8f5fc73c-2229-4292-9815-3b477dce83c2.mp4"></video></p>
 
-  #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video></p>
+#+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video></p>
   
-  # #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172445445-cd7ed215-3f8a-44b0-b0bf-24d68b2bdfbe.mp4"></video></p>
+# #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172445445-cd7ed215-3f8a-44b0-b0bf-24d68b2bdfbe.mp4"></video></p>
+
+To do this, turn on =elfeed-tube-mpv-follow-mode= (~C-c C-f~). When this mode is active you can pause video playback with ~SPC~. Clicking on any segment in the transcript will still seek to that point. 
   
-  #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172447539-9bbe4a73-eca6-40a1-bf15-0bee8f3b8d94.mp4"></video></p>
+You can combine =elfeed-tube-mpv-follow-mode= with other Emacs buffer modes, like Emacs' =follow-mode= that shows a contiguous buffer in two windows:
+
+#+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172447539-9bbe4a73-eca6-40a1-bf15-0bee8f3b8d94.mp4"></video></p>
   
-  To do this, turn on =elfeed-tube-mpv-follow-mode= (~C-c C-f~). When this mode is active you can pause video playback with ~SPC~. Clicking on any segment in the transcript will still seek to that point. 
-  
-  This does not lock up Emacs. You can work in a different window while tracking updates in this one.
+This feature does not lock up Emacs. You can work in a different window while tracking updates in this one.
 
 ** Archivable and retrievable
 The information fetched by Elfeed Tube, including the transcripts (with timing information) is associated with the feed and stored in your Elfeed database like any other text entry. You can bookmark it in Emacs, refer to it in your other notes and so on.
@@ -276,6 +279,8 @@ Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch
 
 You can independently control auto/manual fetching of info and auto/manual saving of info to the Elfeed database.
 
+** (Optional) Elfeed Tube for any video
+You can call =elfeed-tube-fetch= outside of Elfeed to read an abritrary Youtube video URL and produce an Elfeed-like entry buffer for it with description, other metadata and live transcripts etc. Essentially you can use Elfeed Tube as a Youtube viewer. (This feature is currently experimental.)
 * Customization
 Elfeed Tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
 
@@ -318,9 +323,10 @@ It combines information from a number of sources:
 
 Yes, this does mean that the fetcher code is going to need updating often. Them's the breaks.
 *** Can I use the transcripts feature without using Elfeed?
-(Or without adding the channel/playlist feed to my Elfeed-feeds)
 
-Not at present. Elfeed Tube depends on Elfeed to do a lot of the lifting. If you're interested in creating a stand alone package from this please go ahead.
+Not at present. Elfeed Tube depends on Elfeed to do a lot of the lifting.
+
+However you can use it with any Youtube video, see: [[#optional-elfeed-tube-for-any-video][(Optional) Elfeed Tube for any video]]. If you're interested in creating a stand alone package for this please go ahead.
 *** What about these Youtube features?
 No support is currently planned for
 
@@ -367,10 +373,8 @@ The top comments are occasionally useful, especially on technical videos. I migh
 - Chris Wellons for writing [[https://github.com/skeeto/elfeed][Elfeed]], the best feed reader I've used.
 - Chris Wellons for also writing [[https://github.com/skeeto/emacs-aio][emacs-aio]], the async wrapper for Emacs. It writes callbacks for me so I never have to.
 - Ajay Ramachandran for writing and running [[https://github.com/ajayyy/SponsorBlock][Sponsorblock]]
-- The kind folks maintaining [[https://invidious.io/][Invidious]] instances.
+- The kind folks maintaining [[https://invidious.io/][Invidious]] instances, [[https://youtube-dl.org/][youtube-dl]] and [[https://github.com/yt-dlp/yt-dlp/][yt-dlp]]
 
-** COMMENT Re-punctuated (Experimental)                                      :noexport:
-There is currently experimental support for adding punctuation to (English-only) auto-generated captions. This uses a trained recurrent neural net provided by an online service. 
-
-However For privacy reasons, this is turned off by default.
-
+# Local Variables:
+# eval: (when (featurep 'toc-org-mode) (toc-org-mode 1))
+# End:
