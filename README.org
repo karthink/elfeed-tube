@@ -263,7 +263,7 @@ The fetched info will be cached for this Emacs session. Entries that you deem us
 
 #+html: <p align="center"><img src="media/elfeed-tube-now-saved.jpg"></p>
 
-You can change the marker style through =elfeed-tube-minimal-save-indicator-p= if you'd like a more subdued indicator.
+You can change the marker style through =elfeed-tube-save-indicator= if you'd like a more subdued indicator.
 
 ** (Optional) Fetch manually
 Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch= (bound to ~F~) from an Elfeed Search or Show buffer to fetch selectively. To do this, set
@@ -305,7 +305,7 @@ Control the size with =elfeed-tube-thumbnail-size=.
 ** Persistence
 Set the boolean =elfeed-tube-auto-save-p= to =t= to automatically save fetched information to the Elfeed database.
 
-The boolean =elfeed-tube-minimal-save-indicator-p= controls the style of indicator used to indicate unsaved content.
+The boolean =elfeed-tube-save-indicator= controls the style of indicator used to indicate unsaved content.
 
 * FAQ
 *** Do I need a Youtube API key to use this?

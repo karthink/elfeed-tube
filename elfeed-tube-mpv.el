@@ -96,59 +96,61 @@ entry.")
 (defun elfeed-tube-mpv--follow (entry-playing)
   (if (not (mpv-live-p))
       (elfeed-tube-mpv--overlay-clear)
-    (when-let ((entry-buf (get-buffer "*elfeed-entry*")))
+    (when-let ((entry-buf (get-buffer
+                           (elfeed-show--buffer-name
+                            entry-playing))))
       (when (and (or (derived-mode-p 'elfeed-show-mode)
 		     (window-live-p (get-buffer-window entry-buf)))
 		 (elfeed-tube--same-entry-p
                   (buffer-local-value 'elfeed-show-entry entry-buf)
 		  entry-playing)
-		  (eq (mpv-get-property "pause")
-		      json-false))
-		 (condition-case nil 
-		     (when-let ((mpv-time (mpv-get-property "time-pos")))
-		       (with-current-buffer entry-buf
+		 (eq (mpv-get-property "pause")
+		     json-false))
+	(condition-case nil 
+	    (when-let ((mpv-time (mpv-get-property "time-pos")))
+	      (with-current-buffer entry-buf
 
-			 ;; Create overlay
-			 (unless (overlayp elfeed-tube-mpv--overlay)
-			   (save-excursion
-			     (beginning-of-buffer)
-			     (text-property-search-forward
-			      'timestamp)
-			     (setq elfeed-tube-mpv--overlay
-				   (make-overlay (point) (point)))
-			     (overlay-put elfeed-tube-mpv--overlay
-					  'face '(:inverse-video t))))
-			 
-                         ;; Handle narrowed buffers
-                         (when (buffer-narrowed-p)
-                           (save-excursion
-                             (let ((min (point-min))
-                                   (max (point-max))
-                                   beg end)
-                               (goto-char min)
-                               (setq beg (prop-match-value
-                                          (text-property-search-forward
-                                           'timestamp)))
-                               (goto-char max)
-                               (widen)
-                               (setq end (prop-match-value
-                                          (text-property-search-forward
-                                           'timestamp)))
-                               (narrow-to-region min max)
-                               (cond
-                                ((and beg (< mpv-time beg))
-                                 (mpv-set-property "time-pos" (1- beg)))
-                                ((and end (> mpv-time end))
-                                 (mpv-set-property "time-pos" (1+ end))
-                                 (mpv-set-property "pause" t))))))
-                         
-                         ;; Update overlay
-                         (when-let ((next (elfeed-tube-mpv--where-internal mpv-time)))
-                           (goto-char next)
-                           (move-overlay elfeed-tube-mpv--overlay
-				         (save-excursion (beginning-of-visual-line) (point))
-				         (save-excursion (end-of-visual-line) (point))))))
-		   ('error nil))))))
+		;; Create overlay
+		(unless (overlayp elfeed-tube-mpv--overlay)
+		  (save-excursion
+		    (beginning-of-buffer)
+		    (text-property-search-forward
+		     'timestamp)
+		    (setq elfeed-tube-mpv--overlay
+			  (make-overlay (point) (point)))
+		    (overlay-put elfeed-tube-mpv--overlay
+				 'face '(:inverse-video t))))
+		
+                ;; Handle narrowed buffers
+                (when (buffer-narrowed-p)
+                  (save-excursion
+                    (let ((min (point-min))
+                          (max (point-max))
+                          beg end)
+                      (goto-char min)
+                      (setq beg (prop-match-value
+                                 (text-property-search-forward
+                                  'timestamp)))
+                      (goto-char max)
+                      (widen)
+                      (setq end (prop-match-value
+                                 (text-property-search-forward
+                                  'timestamp)))
+                      (narrow-to-region min max)
+                      (cond
+                       ((and beg (< mpv-time beg))
+                        (mpv-set-property "time-pos" (1- beg)))
+                       ((and end (> mpv-time end))
+                        (mpv-set-property "time-pos" (1+ end))
+                        (mpv-set-property "pause" t))))))
+                
+                ;; Update overlay
+                (when-let ((next (elfeed-tube-mpv--where-internal mpv-time)))
+                  (goto-char next)
+                  (move-overlay elfeed-tube-mpv--overlay
+				(save-excursion (beginning-of-visual-line) (point))
+				(save-excursion (end-of-visual-line) (point))))))
+	  ('error nil))))))
 
 (defun elfeed-tube-mpv--where-internal (mpv-time)
   (save-excursion 
@@ -195,8 +197,8 @@ entry.")
                 (mpv-get-property "time-pos")))
     (let ((pulse-delay 0.08)
           (pulse-iterations 16))
-      (pulse-momentary-highlight-one-line))
-   (t (message "Transcript location not found in buffer.")))))
+      (pulse-momentary-highlight-one-line)))
+   (t (message "Transcript location not found in buffer."))))
 
 (define-minor-mode elfeed-tube-mpv-follow-mode
   "Toggle mpv follow mode in elfeed-show buffers that display

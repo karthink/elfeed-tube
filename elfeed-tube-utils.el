@@ -322,12 +322,12 @@ This function returns a promise.
                               (elfeed-tube--attempt-log attempts))
              (and (functionp next) (funcall next))
              (aio-await
-              (elfeed-tube--search-to-chan url next desc (1- attempts))))))
+              (elfeed-tube--aio-fetch url next desc (1- attempts))))))
          (t (elfeed-tube-log 'error "[Search][%s]: %s (%s)" error-msg url
                              (elfeed-tube--attempt-log attempts))
             (and (functionp next) (funcall next))
             (aio-await
-             (elfeed-tube--search-to-chan url next desc (1- attempts)))))))))
+             (elfeed-tube--aio-fetch url next desc (1- attempts)))))))))
 
 (defsubst elfeed-tube--video-p (cand)
   (string-match
@@ -352,6 +352,57 @@ This function returns a promise.
     (rx "channel/"
         (group (1+ (not "&")))))
    cand))
+
+(aio-defun elfeed-tube--fake-entry (url &optional force-fetch)
+  (string-match (concat elfeed-tube--yt-base-url
+                        (rx (zero-or-one "watch?v=")
+                            (group (1+ (not (or "&" "?"))))))
+                url)
+  (if-let ((video-id (match-string 1 url)))
+      (progn
+        (message "Creating a video summary...")
+        (cl-letf* ((elfeed-show-unique-buffers t)
+                   (elfeed-show-entry-switch #'display-buffer)
+                   (elfeed-tube-save-indicator nil)
+                   (api-data (aio-await
+                              (elfeed-tube--aio-fetch
+                               (concat (aio-await (elfeed-tube--get-invidious-url))
+                                       elfeed-tube--api-videos-path
+                                       video-id
+                                       "?fields="
+                                       ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
+                                       "title,author,authorUrl,published")
+                               #'elfeed-tube--nrotate-invidious-servers)))
+                   (feed-id (concat "https://www.youtube.com/feeds/videos.xml?channel_id="
+                                    (nth 1 (split-string (plist-get api-data :authorUrl)
+                                                         "/" t))))
+                   (author `((:name ,(plist-get api-data :author)
+                                    :uri ,feed-id)))
+                   (entry
+                    (elfeed-entry--create
+                     :link url
+                     :title (plist-get api-data :title)
+                     :id `("www.youtube.com" . ,(concat "yt:video:" video-id))
+                     :date (plist-get api-data :published)
+                     :tags '(youtube)
+                     :content-type 'html
+                     :meta `(:authors ,author)
+                     :feed-id feed-id))
+                   ((symbol-function 'elfeed-entry-feed)
+                    (lambda (_)
+                      (elfeed-feed--create
+                       :id feed-id
+                       :url feed-id
+                       :title (plist-get api-data :author)
+                       :author author))))
+          (aio-await (elfeed-tube--fetch-1 entry force-fetch))
+          (with-selected-window (elfeed-show-entry entry)
+            (message "Summary created for video: \"%s\""
+                     (elfeed-entry-title entry))
+            (setq-local elfeed-show-refresh-function
+                        (lambda () (interactive)
+                          (elfeed-tube-show))))))
+    (message "Not a youtube video URL, aborting.")))
 
 (provide 'elfeed-tube-utils)
 ;;; elfeed-tube-utils.el ends here

@@ -113,13 +113,22 @@ Example:
   :group 'elfeed-tube
   :type '(repeat string))
 
-(defcustom elfeed-tube-minimal-save-indicator-p nil
-  "Style of indication that entry information is unsaved.
+(defcustom elfeed-tube-save-indicator "[*NOT SAVED*]"
+  "Indicator to show in Elfeed entry buffers that have unsaved metadata.
 
-When set to true, elfeed-tube will use a minimal indicator next
-to the title."
+This can be set to a string, which will be displayed below the
+headers as a button. Activating this button saves the metadata to
+the Elfeed database.
+
+If set to any symbol except nil, it displays a minimal indicator
+at the top of the buffer instead.
+
+If set to nil, the indicator is disabled."
   :group 'elfeed-tube
-  :type  'boolean)
+  :type '(choice (const  :tag "Disabled" nil)
+                 (symbol :tag "Minimal" :value t)
+                 (string :tag "Any string")))
+
 (defcustom elfeed-tube-auto-save-p nil
   "Save information fetched by elfeed-tube to the Elfeed databse.
 
@@ -371,7 +380,8 @@ This is a boolean. When set to t, video information will be fetched automaticall
   (when-let* ((show-buf
                (if intended-entry
                    (get-buffer (elfeed-show--buffer-name intended-entry))
-                 (current-buffer)))
+                 (and (elfeed-tube--youtube-p elfeed-show-entry)
+                      (current-buffer))))
               (entry (buffer-local-value 'elfeed-show-entry show-buf))
               (intended-entry (or intended-entry entry)))
     (when (elfeed-tube--same-entry-p entry intended-entry)
@@ -385,7 +395,11 @@ This is a boolean. When set to t, video information will be fetched automaticall
           (goto-char (point-max))
           (when (text-property-search-backward
                  'face 'message-header-name)
-            (beginning-of-line))
+            (beginning-of-line)
+            (when (looking-at "Transcript:")
+              (text-property-search-backward
+               'face 'message-header-name)
+              (beginning-of-line)))
           
           ;; Duration
           (if-let ((_ (elfeed-tube-include-p 'duration))
@@ -396,22 +410,27 @@ This is a boolean. When set to t, video information will be fetched automaticall
             (forward-line 1))
           
           ;; DB Status
-          (when (or (and data-item (elfeed-tube-item-desc data-item)
-                         (not (elfeed-entry-content entry)))
-                    (and data-item (elfeed-tube-item-thumb data-item)
-                         (not (elfeed-meta entry :thumb)))
-                    (and data-item (elfeed-tube-item-caps data-item)
-                         (not (elfeed-meta entry :caps))))
+          (when (and
+                 elfeed-tube-save-indicator
+                 (or (and data-item (elfeed-tube-item-desc data-item)
+                          (not (elfeed-entry-content entry)))
+                     (and data-item (elfeed-tube-item-thumb data-item)
+                          (not (elfeed-meta entry :thumb)))
+                     (and data-item (elfeed-tube-item-caps data-item)
+                          (not (elfeed-meta entry :caps)))))
             (let ((prop-list
                    `(face (:inherit warning :weight bold) mouse-face highlight
                           help-echo "mouse-1: save this entry to the elfeed-db"
                           keymap ,elfeed-tube--save-state-map)))
-              (if elfeed-tube-minimal-save-indicator-p 
-                  (save-excursion
+              (if (stringp elfeed-tube-save-indicator)
+                  (insert (apply #'propertize
+                                 elfeed-tube-save-indicator
+                                 prop-list)
+                          "\n")
+                (save-excursion
                     (goto-char (point-min))
                     (end-of-line)
-                    (insert " " (apply #'propertize "[∗]" prop-list)))
-                (insert (apply #'propertize "[*NOT SAVED*]" prop-list) "\n"))))
+                    (insert " " (apply #'propertize "[∗]" prop-list))))))
           
           ;; Thumbnail
           (when-let ((_ (elfeed-tube-include-p 'thumbnail))
@@ -501,8 +520,9 @@ This is a boolean. When set to t, video information will be fetched automaticall
                       finally return (nconc result (list (list pstart time para)))))
             (inhibit-read-only t))
         (goto-char (point-max))
-        (insert (propertize "\nTranscript:\n\n"
-                            'face 'message-header-name))
+        (insert "\n"
+                (propertize "Transcript:" 'face 'message-header-name)
+                "\n\n")
         (cl-loop for (start end para) in caption-ordered
                  with beg = (point) do
                  (progn
@@ -920,6 +940,9 @@ In elfeed-show buffers, ENTRIES is the entry being displayed.
 In elfeed-search buffers, ENTRIES is the entry at point, or all
 entries in the region when the region is active.
 
+Outside of Elfeed, prompt the user for any Youtube video URL and
+generate an Elfeed-like summary buffer for it.
+
 With optional prefix argument FORCE-FETCH, force refetching of
 the metadata for ENTRIES.
 
@@ -927,13 +950,16 @@ If you want to always add this metadata to the database, consider
 setting `elfeed-tube-auto-save-p'. To customize what kinds of
 metadata are fetched, customize TODO
 `elfeed-tube-fields'."
-  (interactive (list (elfeed-tube--get-entries)
+  (interactive (list (or (ensure-list (elfeed-tube--get-entries))
+                         (read-from-minibuffer "Youtube video URL: "))
                      current-prefix-arg))
-  (if (not elfeed-tube-fields)
-      (message "Nothing to fetch! Customize `elfeed-tube-fields'.")
-    (dolist (entry (ensure-list entries))
-      (aio-await (elfeed-tube--fetch-1 entry force-fetch))
-      (elfeed-tube-show entry))))
+  (if (not (listp entries))
+      (elfeed-tube--fake-entry entries force-fetch)
+    (if (not elfeed-tube-fields)
+        (message "Nothing to fetch! Customize `elfeed-tube-fields'.")
+      (dolist (entry (ensure-list entries))
+        (aio-await (elfeed-tube--fetch-1 entry force-fetch))
+        (elfeed-tube-show entry)))))
 
 (defun elfeed-tube-save (entries)
   "Save elfeed-tube youtube metadata for ENTRIES to the elfeed database.
