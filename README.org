@@ -93,9 +93,11 @@ Finally, you can also follow along with the video in Emacs:
 
 # #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172347599-8f5fc73c-2229-4292-9815-3b477dce83c2.mp4"></video></p>
 
-#+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video></p>
+# #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video></p>
   
 # #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172445445-cd7ed215-3f8a-44b0-b0bf-24d68b2bdfbe.mp4"></video></p>
+
+#+html: <p alignn="center"><video src="https://user-images.githubusercontent.com/8607532/173082252-cc2ea1f2-e468-47fb-8384-931e7c85966a.mp4"></video></p>
 
 To do this, turn on =elfeed-tube-mpv-follow-mode= (~C-c C-f~). When this mode is active you can pause video playback with ~SPC~. Clicking on any segment in the transcript will still seek to that point. 
   
