@@ -209,7 +209,8 @@ queries."
             (cancel   (propertize "C-c C-k" 'face 'help-key-binding))
             (copy     (propertize "C-c C-w" 'face 'help-key-binding)))
         
-        (toggle-truncate-lines 1)
+        (let ((inhibit-message t))
+          (toggle-truncate-lines 1))
         (insert "\n")
         (when (> fails 0)
           (insert (propertize
@@ -258,10 +259,11 @@ afterwards."
   (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
   (let* ((channels tabulated-list-entries)
          authors feeds)
+    (let ((inhibit-message t))
+      (cl-loop for channel in channels
+               for (author query feed) = (append (cadr channel) nil)
+               do (elfeed-add-feed feed :save t)))
     (message "Added to elfeed-feeds.")
-    (cl-loop for channel in channels
-             for (author query feed) = (append (cadr channel) nil)
-             do (elfeed-add-feed feed :save t))
     (when arg (elfeed))))
 
 (define-derived-mode elfeed-tube-channels-mode tabulated-list-mode

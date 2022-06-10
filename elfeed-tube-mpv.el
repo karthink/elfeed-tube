@@ -3,7 +3,7 @@
 (require 'pulse)
 
 (defcustom elfeed-tube-mpv-options
-  '("--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
+  '(;; "--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
     "--cache=yes"
     ;; "--script-opts=osc-scalewindowed=2,osc-visibility=always"
     )
@@ -59,14 +59,14 @@ entry.")
   (if (not elfeed-tube--mpv-available-p)
       (message "Could not find mpv + youtube-dl/yt-dlp in PATH.")
     (when-let* ((time (or (get-text-property pos 'timestamp) 0))
-                (video-id (elfeed-tube--get-video-id elfeed-show-entry))
+                (entry (or elfeed-show-entry
+                           (elfeed-search-selected 'ignore-region)))
+                (video-id (elfeed-tube--get-video-id entry))
                 (video-url (concat "https://youtube.com/watch?v="
                                    video-id
                                    "&t="
                                    (number-to-string (floor time))))
-                (args (append elfeed-tube-mpv-options (list video-url)))
-                (entry (or elfeed-show-entry
-                           (elfeed-search-selected 'ignore-region))))
+                (args (append elfeed-tube-mpv-options (list video-url))))
       (run-hook-with-args 'elfeed-tube-mpv-hook entry)
       ;; (pulse-momentary-highlight-one-line)
       (if (and (not arg) (require 'mpv nil t))
