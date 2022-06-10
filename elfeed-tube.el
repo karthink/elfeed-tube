@@ -329,7 +329,6 @@ This is a boolean. When set to t, video information will be fetched automaticall
 
 ;; Data munging
 (defun elfeed-tube--parse-desc (api-data)
-  "test"
   (let* ((length-seconds (plist-get api-data :lengthSeconds))
          (desc-html (replace-regexp-in-string
                      "\n" "<br>"
@@ -838,16 +837,16 @@ The result is a plist with the following keys:
               ;; Retry #attempts times
               (elfeed-tube-log 'error
                "[Description][video:%s][%s]: %s %s"
-               (elfeed-tube--truncate entry)
+               (elfeed-tube--truncate (elfeed-entry-title entry))
                api-url
-               (plist-get response :error-message)
+               (plist-get api-response :error-message)
                (elfeed-tube--attempt-log attempts))
               (elfeed-tube--nrotate-invidious-servers)
               (aio-await
                (elfeed-tube--fetch-desc entry (- attempts 1)))))
 
         (message
-         "Could not find a valid Invidious url. Please cusomize `elfeed-tube-invidious-url'.")
+         "Could not find a valid Invidious url. Please customize `elfeed-tube-invidious-url'.")
         nil))))
 
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)

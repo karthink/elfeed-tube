@@ -31,11 +31,11 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
 - [[#usage][Usage]]
   - [[#step-i-add-youtube-subscriptions-to-elfeed][Step I: Add Youtube subscriptions to Elfeed]]
   - [[#step-ii-use-elfeed-as-usual][Step II: Use Elfeed as usual]]
-  - [[#commands-summary][Commands summary]]
   - [[#optional-for-live-captions-with-mpv][(Optional) For "Live" captions with MPV]]
   - [[#optional-view-entries-instead-of-auto-saving-them][(Optional) View entries instead of auto-saving them]]
   - [[#optional-fetch-manually][(Optional) Fetch manually]]
   - [[#optional-elfeed-tube-for-any-video][(Optional) Elfeed Tube for any video]]
+  - [[#commands-summary][Commands summary]]
 - [[#customization][Customization]]
   - [[#disabling-fields][Disabling fields]]
   - [[#customizing-fields][Customizing fields]]
@@ -229,16 +229,6 @@ If you're new to Elfeed, you can start with =M-x elfeed=.
 
 In case the fetch for a Youtube entry fails you can call =M-x elfeed-tube-fetch= with a prefix argument (~C-u F~ or ~C-u M-x elfeed-tube-fetch~) to force a refetch.
 
-** Commands summary
-| Command                     | Description                                  | Where              | suggested key-binding   |
-|-----------------------------+----------------------------------------------+--------------------+-------------------------|
-| =elfeed-tube-add-feeds=       | Find youtube feeds from search queries       | Anywhere in Emacs  | N/A                     |
-| =elfeed-tube-fetch=           | Manually fetch video info (optional)         | Anywhere in Elfeed | ~F~                       |
-| =elfeed-tube-save=            | Manually save entry to Elfeed DB (optional)  | In an Elfeed entry | ~C-x C-s~                 |
-| =elfeed-tube-mpv-where=     | Jump to current video location in transcript | In an Elfeed entry | ~C-c C-w~               |
-| =elfeed-tube-mpv-follow-mode= | Continuously track a video playing in MPV    | In an Elfeed entry | ~C-c C-f~               |
-| N/A                         | Open/Seek video to this time                 | In an Elfeed entry | ~mouse-1~, ~mouse-2~ or ~RET~ |
-
 ** (Optional) For "Live" captions with MPV
 For a "live" connection between the transcript and MPV:
 
@@ -280,7 +270,18 @@ Finally, you can also disable auto-fetching data and call =M-x elfeed-tube-fetch
 You can independently control auto/manual fetching of info and auto/manual saving of info to the Elfeed database.
 
 ** (Optional) Elfeed Tube for any video
-You can call =elfeed-tube-fetch= outside of Elfeed to read an abritrary Youtube video URL and produce an Elfeed-like entry buffer for it with description, other metadata and live transcripts etc. Essentially you can use Elfeed Tube as a Youtube viewer. (This feature is currently experimental.)
+You can call =elfeed-tube-fetch= outside of Elfeed to read an abritrary Youtube video URL (not just feed entries) and produce an Elfeed-like entry buffer for it with description, other metadata and live transcripts etc. Essentially you can use Elfeed Tube as a Youtube viewer. This feature is currently experimental.
+** Commands summary
+| Command                     | Description                                  | Where              | suggested key-binding   |
+|-----------------------------+----------------------------------------------+--------------------+-------------------------|
+| =elfeed-tube-add-feeds=       | Find youtube feeds from search queries       | Anywhere in Emacs  | N/A                     |
+| =elfeed-tube-fetch=           | Fetch info for any video                     | Anywhere in Emacs  | N/A                     |
+| =elfeed-tube-fetch= (again)   | Fetch video info for feed entry (optional)   | Anywhere in Elfeed | ~F~                       |
+| =elfeed-tube-save=            | Manually save entry to Elfeed DB (optional)  | In an Elfeed entry | ~C-x C-s~                 |
+| =elfeed-tube-mpv-where=       | Jump to current video location in transcript | In an Elfeed entry | ~C-c C-w~                 |
+| =elfeed-tube-mpv-follow-mode= | Continuously track a video playing in MPV    | In an Elfeed entry | ~C-c C-f~                 |
+| N/A                         | Open/Seek video to this time                 | In an Elfeed entry | ~mouse-1~, ~mouse-2~ or ~RET~ |
+
 * Customization
 Elfeed Tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
 
