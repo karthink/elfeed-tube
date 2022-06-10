@@ -1,6 +1,45 @@
-;; -*- lexical-binding: t; -*-
+;;; elfeed-tube-mpv.el --- Control mpv from Elfeed Tube  -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2022  Karthik Chikmagalur
+
+;; Author: Karthik Chikmagalur <karthikchikmagalur@gmail.com>
+;; version: 0.10
+;; Keywords: news, hypermedia
+;; Package-Requires: ((emacs "27.1") (elfeed-tube "0.10") (mpv "0.2.0"))
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; This package provides integration with the mpv video player for Elfeed Tube entries, which see. It defines two commands and a minor mode:
+;;
+;; - elfeed-tube-mpv: Start an mpv session that is "connected" to an Elfeed
+;; entry corresponding to a Youtube video. You can use this command to start
+;; playback, or seek in mpv to a transcript segmennt, or enqueue a video in
+;; mpvif one is already playing. Call with a prefix argument to spawn a new
+;; instance of mpv instead.
+;;
+;; - elfeed-tube-mpv-where: Jump in Emacs to the transcript positionn
+;; corresponding to the current playback time in mpv.
+;;
+;; - elfeed-tube-mpv-follow-mode: Follow along in the transcript in Emacs to the
+;; video playback.
+;;
+;;; Code:
 (require 'pulse)
+(require 'elfeed-tube)
+(require 'mpv)
 
 (defcustom elfeed-tube-mpv-options
   '(;; "--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
@@ -17,7 +56,6 @@ Each element in this list is a string. Examples:
 - \"--osc=no\""
   :group 'elfeed-tube
   :type '(repeat string))
-
 (defvar elfeed-tube--mpv-available-p
   (and (executable-find "mpv")
        (or (executable-find "youtube-dl")
@@ -30,6 +68,23 @@ Each element in this list is a string. Examples:
 
 Each function must accept one argument, the current Elfeed
 entry.")
+
+(let ((map elfeed-tube-captions-map))
+  (define-key map (kbd "RET") #'elfeed-tube-mpv)
+  (define-key map [mouse-1] (elfeed-tube-captions-browse-with
+                             #'elfeed-tube-mpv))
+  (define-key map (kbd "C-<down-mouse-1>")
+    (elfeed-tube-captions-browse-with
+     (lambda (pos) (elfeed-tube-mpv pos t)))))
+
+(setq-default
+ elfeed-tube--caption-echo-message
+ (defsubst elfeed-tube-mpv--echo-message (time)
+   (format
+    "  mouse-1: open at %s (mpv)
+C-mouse-1: open at %s (mpv, new instance)
+  mouse-2: open at %s (web browser)"
+    time time time)))
 
 (defsubst elfeed-tube-mpv--check-path (video-url)
   (condition-case nil
@@ -54,6 +109,17 @@ entry.")
            (delete-overlay elfeed-tube-mpv--overlay))))
 
 (defun elfeed-tube-mpv (pos &optional arg)
+  "Start or seek an mpv session connected to an Elfeed entry.
+
+Call this command with point POS on an Elfeed entry in an Elfeed
+Search buffer, or anywhere in an Elfeed Entry, to play the
+corresponding video. When called with point in a transcript
+segment, seek here or start a new session as appropriate. If a
+connected mpv session for a different video is already running
+enqueue this video instead.
+
+With prefix argument ARG always start a new, unnconnected mpv
+session."
   (interactive (list (point)
                      current-prefix-arg))
   (if (not elfeed-tube--mpv-available-p)
@@ -179,7 +245,7 @@ entry.")
           (prop-match-beginning match)))))
 
 (defun elfeed-tube-mpv-where ()
-  "Jump to the current position of mpv playback."
+  "Jump to the current mpv position in a video transcript."
   (interactive)
   (cond
    ((not (featurep 'mpv))
@@ -201,12 +267,13 @@ entry.")
    (t (message "Transcript location not found in buffer."))))
 
 (define-minor-mode elfeed-tube-mpv-follow-mode
-  "Toggle mpv follow mode in elfeed-show buffers that display
-Youtube feed entries. When the video player mpv is started from
-this buffer (from any location in the transcript), turning on
-this minor-mode will cause the cursor to track the currently
-playing segment in mpv. You can still click anywhere in the
-transcript to seek to that point in the video."
+  "Follow along with mpv in elfeed-show buffers.
+
+This appliies to Youtube feed entries in Elfeed. When the video
+player mpv is started from this buffer (from any location in the
+transcript), turning on this minor-mode will cause the cursor to
+track the currently playing segment in mpv. You can still click
+anywhere in the transcript to seek to that point in the video."
   :global nil
   :version "0.10"
   :lighter "(-->)"
@@ -242,3 +309,4 @@ transcript to seek to that point in the video."
     (elfeed-tube-mpv--overlay-clear)))
 
 (provide 'elfeed-tube-mpv)
+;;; elfeed-tube-mpv.el ends here

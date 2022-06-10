@@ -152,9 +152,9 @@ This package is not available on ELPA/MELPA yet. You can install it via Quelpa/S
 - [[https://github.com/skeeto/emacs-aio][aio]], the async-IO library for Emacs.
 Dependencies will be automatically installed if you install Elfeed Tube using a package manager (Straight or Quelpa, or Emacs' built-in package.el once this is on ELPA/MELPA.)
 
-*Optional* (for "live" transcripts):
+*Dependencies*: (for "live" transcripts with =elfeed-tube-mpv=):
+- [[https://github.com/kljohann/mpv.el][mpv]]: The mpv library for Emacs 
 - [[https://mpv.io/][MPV]] video player and [[https://youtube-dl.org/][youtube-dl]] (or [[https://github.com/yt-dlp/yt-dlp/][yt-dlp]])
-- [[https://github.com/kljohann/mpv.el][mpv]]: The mpv library for Emacs (=M-x package-intall mpv= or see setup block below)
 
 ** Set up with =use-package=
 #+BEGIN_SRC emacs-lisp
@@ -178,7 +178,6 @@ Remove the =:straight= directive if you install it manually.
 
 If you want "live" captions and better MPV support:
 #+BEGIN_SRC emacs-lisp
-  (use-package mpv :ensure t :defer t)
   (use-package elfeed-tube-mpv
     :bind (:map elfeed-show-mode-map
                 ("C-c C-f" . elfeed-tube-mpv-follow-mode)
@@ -318,14 +317,14 @@ The boolean =elfeed-tube-save-indicator= controls the style of indicator used to
 * FAQ
 *** Do I need a Youtube API key to use this?
 Not as of right now, it should *Just Work*.
-*** Where does Elfeed Tube get its data from?
+*** Where does Elfeed Tube fetch data from?
 It combines information from a number of sources:
 - Scraping the Youtube video page
 - Invidious instances that provide an API (dynamically found)
 - The Sponsorblock API for crowd-sourced Ad segment identification
 
 Yes, this does mean that the fetcher code is going to need updating often. Them's the breaks.
-*** Can I use the transcripts feature without using Elfeed?
+*** Can I use the transcripts feature without installing Elfeed?
 
 Not at present. Elfeed Tube depends on Elfeed to do a lot of the lifting.
 

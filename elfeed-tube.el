@@ -28,13 +28,13 @@
 ;;
 ;;; Code:
 (require 'elfeed)
-(require 'cl-lib)
+(eval-when-compile
+  (require 'cl-lib))
 (require 'subr-x)
 (require 'rx)
 (require 'aio)
 
 (require 'elfeed-tube-utils)
-(require 'elfeed-tube-mpv)
 
 ;; Customizatiion options
 (defgroup elfeed-tube nil
@@ -144,17 +144,17 @@ This is a boolean. When set to t, video information will be fetched automaticall
   :group 'elfeed-tube
   :type 'boolean)
 
+(defcustom elfeed-tube-captions-sblock-p t
+  "Whether sponsored segments should be de-emphasized in transcripts."
+  :group 'elfeed-tube
+  :type 'boolean)
+
 ;; Internal variables
-;; (defvar elfeed-tube--debug t)
 (defvar elfeed-tube--api-videos-path "/api/v1/videos/")
 (defvar elfeed-tube--info-table (make-hash-table :test #'equal))
 (defvar elfeed-tube--invidious-servers nil)
 (defvar elfeed-tube--sblock-url "https://sponsor.ajay.app")
 (defvar elfeed-tube--sblock-api-path "/api/skipSegments")
-(defcustom elfeed-tube-captions-sblock-p t
-  "Whether sponsored segments should be de-emphasized in transcripts."
-  :group 'elfeed-tube
-  :type 'boolean)
 (defvar elfeed-tube-captions-puntcuate-p t)
 (defvar elfeed-tube--api-video-fields
   '("videoThumbnails" "descriptionHtml" "lengthSeconds"))
@@ -179,12 +179,6 @@ This is a boolean. When set to t, video information will be fetched automaticall
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-2] (elfeed-tube-captions-browse-with
                                #'elfeed-tube--browse-at-time))
-    (define-key map (kbd "RET") #'elfeed-tube-mpv)
-    (define-key map [mouse-1] (elfeed-tube-captions-browse-with
-                               #'elfeed-tube-mpv))
-    (define-key map (kbd "C-<down-mouse-1>")
-      (elfeed-tube-captions-browse-with
-       (lambda (pos) (elfeed-tube-mpv pos t))))
     map))
 
 (defvar elfeed-tube-caption-faces
@@ -568,8 +562,10 @@ This is a boolean. When set to t, video information will be fetched automaticall
                 (get-text-property pos 'timestamp))))
      (when (not (eq type 'text))
        (format "segment: %s\n\n" (symbol-name type)))
-     (format
-      "  mouse-1: open at %s (mpv)\n  mouse-2: open at %s (web browser)\nC-mouse-1: open at %s (mpv, new instance)" time time time))))
+     (funcall elfeed-tube--caption-echo-message time))))
+
+(defvar elfeed-tube--caption-echo-message
+  (lambda (time) (format "mouse-2: open at %s (web browser)" time)))
 
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)
