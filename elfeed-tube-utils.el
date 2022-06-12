@@ -319,7 +319,7 @@ This function returns a promise.
          ((= status 200)
           (condition-case nil
               (json-parse-string content :object-type 'plist)
-            ('(json-parse-error error)
+            ((json-parse-error error)
              (elfeed-tube-log 'error "[Search] JSON malformed (%s)"
                               (elfeed-tube--attempt-log attempts))
              (and (functionp next) (funcall next))

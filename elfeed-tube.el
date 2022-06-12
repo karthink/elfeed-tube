@@ -355,7 +355,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
         (condition-case error
             (json-parse-buffer :object-type 'plist
                                :array-type 'list)
-          ('json-parse-error (throw 'parse-error "json-parse-error")))))))
+          (json-parse-error (throw 'parse-error "json-parse-error")))))))
 
 (defun elfeed-tube--postprocess-captions (text)
   (thread-last
@@ -717,7 +717,7 @@ The result is a plist with the following keys:
             (json-parse-string content-json
                            :object-type 'plist
                            :array-type 'list)
-          ('json-parse-error
+          (json-parse-error
            (elfeed-tube-log
             'error
             "[Sponsorblock][video:%s]: JSON malformed"
@@ -821,7 +821,7 @@ The result is a plist with the following keys:
                     (prog1
                         (elfeed-tube--parse-desc
                          (json-parse-string api-data :object-type 'plist)))
-                  ('json-parse-error
+                  (json-parse-error
                    (elfeed-tube-log
                     'error
                     "[Description][video:%s]: JSON malformed %s"
