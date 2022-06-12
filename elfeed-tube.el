@@ -96,19 +96,25 @@ elfeed-tube when fetching information."
   :type '(repeat string))
 
 (defcustom elfeed-tube-captions-languages
-  '("english" "english (auto generated)")
+  '("en" "english" "english (auto generated)")
   "Caption language priority for elfeed-tube captions.
 
 Captions in the first available langauge in this list will be
-fetched. Each entry (string) in the list can be a
-language (case-insensitive, \"english\") or language codes:
+fetched. Each entry (string) in the list can be a language code
+or a language name (case-insensitive, \"english\"):
 
 - \"en\" for English
 - \"tr\" for Turkish
-- \"ar\" for Arabic, etc
+- \"ar\" for Arabic
+- \"de\" for German
+- \"pt-BR\" for Portugese (Brazil), etc
 
 Example:
-(\"tr\" \"english\" \"arabic\" \"es\" \"english (auto generated)\")
+(\"tr\" \"es\" \"arabic\" \"english\" \"english (auto generated)\")
+
+NOTE: Language codes are safer to use. Language full names differ
+across regions. For example, \"english\" would be spelled
+\"englisch\" if you are in Germany.
 "
   :group 'elfeed-tube
   :type '(repeat string))
@@ -243,11 +249,11 @@ This is a boolean. When set to t, video information will be fetched automaticall
 (defsubst elfeed-tube--match-captions-langs (lang el)
   (and (or (string-match-p
             lang
-            (thread-first (plist-get el :name)
-                          (plist-get :simpleText)))
+            (plist-get el :languageCode))
            (string-match-p
             lang
-            (plist-get el :languageCode)))
+            (thread-first (plist-get el :name)
+                          (plist-get :simpleText))))
        el))
 
 (defsubst elfeed-tube--truncate (str)
