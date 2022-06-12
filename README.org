@@ -141,7 +141,7 @@ Combined with the text manipulation capabilities of Emacs, you can combine these
 - Want to focus playback to a certain part of the transcript? Narrow the buffer (~C-x n n~) to the region you want and turn on =elfeed-tube-mpv-follow-mode=.
   
 * Setup
-This package is not available on ELPA/MELPA yet. You can install it via Quelpa/Straight or by cloning this repository and running =make=.
+This package is not available on ELPA/MELPA yet. You can install it by cloning this repository and running =package-install-file= on this directory, or via Quelpa/Straight.
 
 *Requirements*:
 - Emacs 27.1 or newer
@@ -159,7 +159,7 @@ Dependencies will be automatically installed if you install Elfeed Tube using a 
 ** Set up with =use-package=
 #+BEGIN_SRC emacs-lisp
   (use-package elfeed-tube
-    :straight (:host github :repo "karthink/elfeed-tube")
+    ;; :straight (:host github :repo "karthink/elfeed-tube")
     :after elfeed
     :demand t
     :config
@@ -179,12 +179,29 @@ Remove the =:straight= directive if you install it manually.
 If you want "live" captions and better MPV support:
 #+BEGIN_SRC emacs-lisp
   (use-package elfeed-tube-mpv
+    ;; :straight (:host github :repo "karthink/elfeed-tube")
     :bind (:map elfeed-show-mode-map
                 ("C-c C-f" . elfeed-tube-mpv-follow-mode)
                 ("C-c C-w" . elfeed-tube-mpv-where)))
 #+END_SRC
 
-** TODO Set up without
+** TODO Set up without =use-package=
+#+BEGIN_SRC emacs-lisp
+  (require 'elfeed-tube)
+  (elfeed-tube-setup)
+  (define-key elfeed-show-mode-map (kbd "F") 'elfeed-tube-fetch)
+  (define-key elfeed-show-mode-map [remap save-buffer] 'elfeed-tube-save)
+  (define-key elfeed-search-mode-map (kbd "F") 'elfeed-tube-fetch)
+  (define-key elfeed-search-mode-map [remap save-buffer] 'elfeed-tube-save))
+#+END_SRC
+
+If you want "live" captions and better MPV support:
+#+BEGIN_SRC emacs-lisp
+  (require 'elfeed-tube-mpv)
+  (define-key elfeed-show-mode-map (kbd "C-c C-f") 'elfeed-tube-mpv-follow-mode)
+  (define-key elfeed-show-mode-map (kbd "C-c C-w") 'elfeed-tube-mpv-where)
+
+#+END_SRC
 * Usage
 Elfeed Tube tries its best to work out of the box with no set up, but Step I below is unavoidable if you're starting fresh. If you already have Youtube feeds in your Elfeed feed list, you can go to Step II.
 
