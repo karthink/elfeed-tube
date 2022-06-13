@@ -933,10 +933,14 @@ The result is a plist with the following keys:
          "Could not find a valid Invidious url. Please customize `elfeed-tube-invidious-url'.")
         nil))))
 
+(aio-defun elfeed-tube--with-label (label func &rest args)
+  (cons label (aio-await (apply func args))))
+
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
   (when (elfeed-tube--youtube-p entry)
-    (let* ((cached (elfeed-tube--gethash entry))
-           desc thumb duration caps chaps error)
+    (let* ((fields (aio-make-select))
+           (cached (elfeed-tube--gethash entry))
+           desc thumb duration caps sblock chaps error)
       
       ;; When to fetch a field:
       ;; - force-fetch is true: always fetch
@@ -946,9 +950,9 @@ The result is a plist with the following keys:
       ;; - entry is cached without errors, field not empty: don't fetch
       ;; - entry is saved and field not empty: don't fetch
 
-      ;; Record description
+      ;; Fetch description?
       (when (and (cl-some #'elfeed-tube-include-p
-                          '(description duration thumbnail))
+                          '(description duration thumbnail chapters))
                  (or force-fetch
                      (not (or (and cached
                                    (or (cl-intersection
@@ -960,24 +964,11 @@ The result is a plist with the following keys:
                               (or (elfeed-entry-content entry)
                                   (elfeed-meta entry :thumb)
                                   (elfeed-meta entry :duration))))))
-        (if-let ((api-data
-                  (aio-await (elfeed-tube--fetch-desc entry))))
-            (progn
-              (when (elfeed-tube-include-p 'thumbnail)
-                (setf thumb
-                      (plist-get api-data :thumb)))
-              (when (elfeed-tube-include-p 'description)
-                (setf desc
-                      (plist-get api-data :desc)))
-              (when (elfeed-tube-include-p 'duration)
-                (setf duration
-                      (plist-get api-data :length)))
-              (when (elfeed-tube-include-p 'chapters)
-                (setf chaps
-                      (plist-get api-data :chaps))))
-          (setq error (append error '(desc duration thumb)))))
+        (aio-select-add fields
+                        (elfeed-tube--with-label
+                         'desc #'elfeed-tube--fetch-desc entry)))
 
-      ;; Record captions
+      ;; Fetch captions?
       (when (and (elfeed-tube-include-p 'captions)
                  (or force-fetch
                      (not (or (and cached
@@ -985,14 +976,50 @@ The result is a plist with the following keys:
                                        (memq 'caps (elfeed-tube-item-error cached))))
                               (elfeed-ref-p
                                (elfeed-meta entry :caps))))))
-        (if-let ((caps-new
-                  (aio-await (elfeed-tube--fetch-captions entry))))
-            (progn
-              (setf caps caps-new)
-              (when (and chaps (elfeed-tube-include-p 'chapters))
-                (setf (cadr caps) chaps)))
-          (push 'caps error)))
-
+        (aio-select-add fields
+                        (elfeed-tube--with-label
+                         'caps #'elfeed-tube--fetch-captions entry))
+        ;; Fetch caption sblocks?
+        (when (and nil elfeed-tube-captions-sblock-p)
+          (aio-select-add fields
+                          (elfeed-tube--with-label
+                           'sblock #'elfeed-tube--fetch-captions-sblock entry))))
+      
+      ;; Record fields?
+      (while (aio-select-promises fields)
+        (pcase-let ((`(,label . ,data)
+                     (aio-await (aio-await (aio-select fields)))))
+          (pcase label
+            ('desc
+             (if data
+                 (progn
+                   (when (elfeed-tube-include-p 'thumbnail)
+                     (setf thumb
+                           (plist-get data :thumb)))
+                   (when (elfeed-tube-include-p 'description)
+                     (setf desc
+                           (plist-get data :desc)))
+                   (when (elfeed-tube-include-p 'duration)
+                     (setf duration
+                           (plist-get data :length)))
+                   (when (elfeed-tube-include-p 'chapters)
+                     (setf chaps
+                           (plist-get data :chaps))))
+               (setq error (append error '(desc duration thumb)))))
+            ('caps
+             (if data
+                 (setf caps data)
+               (push 'caps error)))
+            ('sblock
+             (and data (setf sblock data))))))
+      
+      ;; Add (optional) sblock and chapter info to caps
+      (when caps
+        (when sblock
+          (setf caps (elfeed-tube--sblock-captions sblock caps)))
+        (when chaps
+          (setf (cadr caps) chaps)))
+      
       (if (and elfeed-tube-auto-save-p
                (or duration caps desc thumb))
           ;; Store in db
