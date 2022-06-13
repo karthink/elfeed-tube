@@ -152,4 +152,33 @@ Tube."
       (should-not  (cl-mismatch (cl-subseq caption-sexp 0 2)
                                 '(transcript nil))))))
   
+(ert-deftest elfeed-tube--fetch-1-test ()
+  "Fetch all available data for an Elfeed entry"
+  (let* ((entry (elfeed-entry--create
+                 :id '("www.youtube.com" . "yt:video:Pj-h6MEgE7I")
+                 :title "You Are Not Where You Think You Are"
+                 :link "https://www.youtube.com/watch?v=Pj-h6MEgE7I"
+                 :date 1652795984.0
+                 :tags '(youtube)
+                 :feed-id "https://www.youtube.com/feeds/videos.xml?channel_id=UCsXVk37bltHxD1rDPwtNM8Q"
+                 :content-type 'html
+                 :meta '(:authors
+                         ((:name "Kurzgesagt – In a Nutshell" :uri "https://www.youtube.com/channel/UCsXVk37bltHxD1rDPwtNM8Q")))))
+         (elfeed-tube-field '(duration thumbnail description captions))
+         (elfeed-tube-auto-save-p nil))
+    
+    (when (elfeed-tube--gethash entry)
+      (remhash (elfeed-tube--get-video-id entry) elfeed-tube--info-table))
+
+    (aio-wait-for (elfeed-tube--fetch-1 entry))
+
+    (let ((cached (elfeed-tube--gethash entry)))
+      (should (elfeed-tube-item-p cached))
+      (should-not (elfeed-tube-item-error cached))
+      (should (elfeed-tube-item-thumb cached))
+      (should (elfeed-tube-item-desc cached))
+      (should (elfeed-tube-item-len cached))
+      (should (equal (cl-subseq (elfeed-tube-item-caps cached) 0 2)
+                     '(transcript nil))))))
+
 (provide 'elfeed-tube-test)
