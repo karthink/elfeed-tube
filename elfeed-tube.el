@@ -563,11 +563,11 @@ This is a boolean. When set to t, video information will be fetched automaticall
 
 (defun elfeed-tube--caption-echo (win obj pos)
   (concat
-   (let ((type (get-text-property pos 'type))
-         (time (elfeed-tube--timestamp
-                (get-text-property pos 'timestamp))))
+   (let ((type (get-text-property pos 'type)))
      (when (not (eq type 'text))
-       (format "segment: %s\n\n" (symbol-name type)))
+       (format "  segment: %s\n\n" (symbol-name type))))
+   (let ((time (elfeed-tube--timestamp
+                (get-text-property pos 'timestamp))))
      (funcall elfeed-tube--caption-echo-message time))))
 
 (defvar elfeed-tube--caption-echo-message
