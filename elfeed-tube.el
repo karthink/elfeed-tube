@@ -911,7 +911,7 @@ The result is a plist with the following keys:
           (progn (elfeed-tube--write-db
                   entry
                   (elfeed-tube-item--create
-                   :len duraion :desc desc :thumb thumb
+                   :len duration :desc desc :thumb thumb
                    :caps caps))
                  (elfeed-tube-log
                   'info "Saved to elfeed-db: %s"
