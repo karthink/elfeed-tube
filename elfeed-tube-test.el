@@ -65,24 +65,6 @@ Tube."
       (should (null (elfeed-meta entry :caps)))
       (should (null (elfeed-meta entry :thumb))))))
 
-(ert-deftest elfeed-tube--channel-add-predicate-test ()
-  "Test if input urls to find youtube channels are matched correctly."
-  (let ((vid-url-1 "https://www.youtube.com/watch?v=IV3dnLzthDA&t=120")
-        (vid-url-2 "https://youtu.be/IV3dnLzthDA&t=10")
-        (play-url "https://www.youtube.com/playlist?list=PLexa_cotS5sHIkALAXxPHyMm5LA2kQ5DV&t=10")
-        (chan-url-2 "https://www.youtube.com/c/veritasium")
-        (chan-url-1 "https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA"))
-    (should (and (elfeed-tube--video-p vid-url-1)
-                 (string= (match-string 1 vid-url-1) "IV3dnLzthDA")))
-    (should (and (elfeed-tube--video-p vid-url-2)
-                 (string= (match-string 1 vid-url-2) "IV3dnLzthDA")))
-    (should (and (elfeed-tube--playlist-p play-url)
-                 (string= (match-string 1 play-url)
-                          "PLexa_cotS5sHIkALAXxPHyMm5LA2kQ5DV")))
-    (should (and (elfeed-tube--channel-p chan-url-1)
-                 (string= (match-string 1 chan-url-1)
-                          "UCHnyfMqiRRG1u-2MsSQLbXA")))))
-
 (ert-deftest elfeed-tube--desc-fetch-test ()
   (let* ((elfeed-tube-invidious-url "https://vid.puffyan.us")
          (elfeed-tube-fields '(duration thumbnail description))
@@ -151,7 +133,7 @@ Tube."
 
       (should-not  (cl-mismatch (cl-subseq caption-sexp 0 2)
                                 '(transcript nil))))))
-  
+
 (ert-deftest elfeed-tube--fetch-1-test ()
   "Fetch all available data for an Elfeed entry"
   (let* ((entry (elfeed-entry--create
@@ -180,5 +162,74 @@ Tube."
       (should (elfeed-tube-item-len cached))
       (should (equal (cl-subseq (elfeed-tube-item-caps cached) 0 2)
                      '(transcript nil))))))
+  
+(ert-deftest elfeed-tube--channel-add-predicate-test ()
+  "Test if input urls to find youtube channels are matched correctly."
+  (let ((vid-url-1 "https://www.youtube.com/watch?v=IV3dnLzthDA&t=120")
+        (vid-url-2 "https://youtu.be/IV3dnLzthDA&t=10")
+        (play-url "https://www.youtube.com/playlist?list=PLexa_cotS5sHIkALAXxPHyMm5LA2kQ5DV&t=10")
+        (chan-url-2 "https://www.youtube.com/c/veritasium")
+        (chan-url-1 "https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA"))
+    (should (and (elfeed-tube--video-p vid-url-1)
+                 (string= (match-string 1 vid-url-1) "IV3dnLzthDA")))
+    (should (and (elfeed-tube--video-p vid-url-2)
+                 (string= (match-string 1 vid-url-2) "IV3dnLzthDA")))
+    (should (and (elfeed-tube--playlist-p play-url)
+                 (string= (match-string 1 play-url)
+                          "PLexa_cotS5sHIkALAXxPHyMm5LA2kQ5DV")))
+    (should (and (elfeed-tube--channel-p chan-url-1)
+                 (string= (match-string 1 chan-url-1)
+                          "UCHnyfMqiRRG1u-2MsSQLbXA")))))
+
+(ert-deftest elfeed-tube--channel-add-test ()
+  "Check if Youtube channel feed URLs are being discovered.
+
+This checks against all supported kinds of queries"
+  (let ((channels
+       (aio-wait-for 
+        (elfeed-tube-add--get-channels
+         '("https://www.youtube.com/c/RealEngineering"
+           "prozd"
+           "https://www.youtube.com/channel/UCP3alkHEJhoxTpy3iVON-lg"
+           "short circuit"
+           "https://www.youtube.com/watch?v=_yMMTVVJI4c"
+           "neovim"
+           "https://www.youtube.com/playlist?list=PLTZM4MrZKfW-ftqKGSbO-DwDiOGqNmq53")))))
+  
+  (should-not
+   (cl-set-difference
+    (mapcar (lambda (c) (elfeed-tube-channel-feed c)) channels)
+    '("https://www.youtube.com/feeds/videos.xml?channel_id=UCy0tKL1T7wFoYcxCe0xjN6Q"
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC6MFZAOHXlKK1FI7V0XQVeA"
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCS97tchJDq17Qms3cux8wcA"
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCR1IuLEqb6UEA_zQ81kwXfg"
+      "https://www.youtube.com/feeds/videos.xml?playlist_id=PLTZM4MrZKfW-ftqKGSbO-DwDiOGqNmq53"
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCdBK94H6oZT2Q7l0-b0xmMg"
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCP3alkHEJhoxTpy3iVON-lg")
+    :test 'string=))
+  
+  (should-not
+   (cl-set-difference
+    (mapcar (lambda (c) (elfeed-tube-channel-url c)) channels)
+    '("https://www.youtube.com/channel/UCy0tKL1T7wFoYcxCe0xjN6Q"
+     "https://www.youtube.com/channel/UC6MFZAOHXlKK1FI7V0XQVeA"
+     "https://www.youtube.com/channel/UCS97tchJDq17Qms3cux8wcA"
+     "https://www.youtube.com/channel/UCR1IuLEqb6UEA_zQ81kwXfg"
+     "https://www.youtube.com/playlist?list=PLTZM4MrZKfW-ftqKGSbO-DwDiOGqNmq53"
+     "https://www.youtube.com/channel/UCdBK94H6oZT2Q7l0-b0xmMg"
+     "https://www.youtube.com/channel/UCP3alkHEJhoxTpy3iVON-lg")
+    :test 'string=))
+
+  (should-not
+   (cl-set-difference
+    (mapcar (lambda (c) (elfeed-tube-channel-author c)) channels)
+    '("Technology Connections"
+      "ProZD"
+      "chris@machine"
+      "Real Engineering"
+      "Electrical Grid"
+      "ShortCircuit"
+      "Physics with Elliot")
+    :test 'string=))))
 
 (provide 'elfeed-tube-test)
