@@ -87,13 +87,17 @@ string, for example \"https://invidio.us\". "
   :type '(choice (string :tag "Custom URL")
                  (const :tag "Disabled (Auto)" nil)))
 
-(defcustom elfeed-tube-youtube-regexps '("youtube\\.com" "youtu\\.be")
-  "List of regular expressions to match Elfeed entry URLs against.
+(defcustom elfeed-tube-youtube-regexp
+  (rx bol
+      (zero-or-one (or "http://" "https://"))
+      (zero-or-one "www.")
+      (or "youtube.com/" "youtu.be/"))
+  "Regular expression to match Elfeed entry URLss against.
 
-Only entries that match one of these regexps will be handled by
+Only entries that match this regexp will be handled by
 elfeed-tube when fetching information."
   :group 'elfeed-tube
-  :type '(repeat string))
+  :type 'string)
 
 (defcustom elfeed-tube-captions-languages
   '("en" "english" "english (auto generated)")
@@ -210,14 +214,19 @@ This is a boolean. When set to t, video information will be fetched automaticall
      (list elfeed-show-entry))))
 
 (defsubst elfeed-tube--youtube-p (entry)
-  (cl-some (lambda (regex) (string-match-p regex (elfeed-entry-link entry)))
-           elfeed-tube-youtube-regexps))
+  (string-match-p elfeed-tube-youtube-regexp
+                  (elfeed-entry-link entry)))
 
 (defsubst elfeed-tube--get-video-id (entry)
   (when (elfeed-tube--youtube-p entry)
-    (thread-first (elfeed-entry-id entry)
-                  cdr-safe
-                  (substring 9))))
+    (when-let* ((link (elfeed-entry-link entry))
+                (_ (string-match
+                    (concat
+                     elfeed-tube-youtube-regexp
+                     "\\(?:watch\\?v=\\)?"
+                     "\\([^?&]+\\)")
+                    link)))
+      (match-string 1 link))))
 
 (defsubst elfeed-tube--random-elt (collection)
   (and collection

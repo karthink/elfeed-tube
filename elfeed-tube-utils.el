@@ -26,12 +26,6 @@
 (require 'rx)
 (require 'aio)
 
-(defvar elfeed-tube--yt-base-url
-  (rx bol
-      (zero-or-one (or "http://" "https://"))
-      (zero-or-one "www.")
-      (or "youtube.com/" "youtu.be/")))
-
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
                                    (:copier nil))
   "Struct to hold youtube channel information."
@@ -91,7 +85,7 @@ queries."
                 channels)))
 
        ((string-match
-         (concat elfeed-tube--yt-base-url "c/" "\\([^?&]+\\)") q)
+         (concat elfeed-tube-youtube-regexp "c/" "\\([^?&]+\\)") q)
         (let ((chan (car (aio-await
                           (elfeed-tube-add--get-channels (match-string 1 q))))))
           (setf (elfeed-tube-channel-query chan) q)
@@ -187,7 +181,7 @@ queries."
                                'help-echo (elfeed-tube-channel-url channel)))
                         notfound)
                    ,(replace-regexp-in-string
-                     elfeed-tube--yt-base-url ""
+                     elfeed-tube-youtube-regexp ""
                      (elfeed-tube-channel-query channel))
                    ,(or (elfeed-tube-channel-feed channel)
                         (propertize "Not found!" 'face 'error))])))
@@ -334,7 +328,7 @@ This function returns a promise.
 (defsubst elfeed-tube--video-p (cand)
   (string-match
    (concat
-    elfeed-tube--yt-base-url
+    elfeed-tube-youtube-regexp
     (rx (zero-or-one "watch?v=")
         (group (1+ (not "&")))))
    cand))
@@ -342,7 +336,7 @@ This function returns a promise.
 (defsubst elfeed-tube--playlist-p (cand)
   (string-match
    (concat
-    elfeed-tube--yt-base-url
+    elfeed-tube-youtube-regexp
     "playlist\\?list="
     (rx (group (1+ (not "&")))))
    cand))
@@ -350,13 +344,13 @@ This function returns a promise.
 (defsubst elfeed-tube--channel-p (cand)
   (string-match
    (concat
-    elfeed-tube--yt-base-url
+    elfeed-tube-youtube-regexp
     (rx "channel/"
         (group (1+ (not "&")))))
    cand))
 
 (aio-defun elfeed-tube--fake-entry (url &optional force-fetch)
-  (string-match (concat elfeed-tube--yt-base-url
+  (string-match (concat elfeed-tube-youtube-regexp
                         (rx (zero-or-one "watch?v=")
                             (group (1+ (not (or "&" "?"))))))
                 url)
