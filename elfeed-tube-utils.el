@@ -56,103 +56,141 @@ queries."
     (elfeed-tube-add--display-channels channels)))
 
 (aio-defun elfeed-tube-add--get-channels (queries)
-  (let* ((queries (ensure-list queries))
+  (let* ((fetches (aio-make-select))
+         (queries (ensure-list queries))
          (playlist-base-url
           "https://www.youtube.com/feeds/videos.xml?playlist_id=")
          (channel-base-url
           "https://www.youtube.com/feeds/videos.xml?channel_id=")
          channels)
+
+    ;; Add all promises to fetches, an aio-select
     (dolist (q queries channels)
       (setq q (string-trim q))
       (cond
        ((elfeed-tube--channel-p q)
-        (if-let* ((chan-id (match-string 1 q))
-                  (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
-                                   "/api/v1/channels/"
-                                   chan-id
-                                   "?fields=author,authorUrl"))
-                  (data (aio-await (elfeed-tube--aio-fetch
-                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
-                  (author (plist-get data :author))
-                  (author-url (plist-get data :authorUrl))
-                  (feed (concat channel-base-url chan-id)))
-            (push (elfeed-tube-channel-create
-                   :query q :author author
-                   :url  q
-                   :feed feed)
-                  channels)
-          (push (elfeed-tube-channel-create :query q :feed feed)
-                channels)))
-
+        (let* ((chan-id (match-string 1 q))
+               (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
+                                "/api/v1/channels/"
+                                chan-id
+                                "?fields=author,authorUrl"))
+               (feed (concat channel-base-url chan-id)))
+          (aio-select-add fetches
+                          (elfeed-tube--with-label
+                           `(:type channel :feed ,feed :query ,q)
+                           #'elfeed-tube--aio-fetch
+                           api-url #'elfeed-tube--nrotate-invidious-servers))))
+        
        ((string-match
          (concat elfeed-tube-youtube-regexp "c/" "\\([^?&]+\\)") q)
-        (let ((chan (car (aio-await
-                          (elfeed-tube-add--get-channels (match-string 1 q))))))
-          (setf (elfeed-tube-channel-query chan) q)
-          (push chan channels)))
+        ;; Interpret channel url as search query
+        (let* ((search-url "/api/v1/search")
+               (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
+                                search-url
+                                "?q=" (url-hexify-string (match-string 1 q))
+                                "&type=channel&page=1")))
+          (aio-select-add fetches
+                          (elfeed-tube--fetch-with-label
+                           `(:type search :query ,q)
+                           #'elfeed-tube--aio-fetch
+                           api-url #'elfeed-tube--nrotate-invidious-servers))))
 
        ((elfeed-tube--playlist-p q)
-        (if-let* ((playlist-id (match-string 1 q))
-                  (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
-                                   "/api/v1/playlists/"
-                                   playlist-id
-                                   "?fields=title,author"))
-                  (data (aio-await (elfeed-tube--aio-fetch
-                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
-                  (title (plist-get data :title))
-                  (author (plist-get data :author))
-                  (feed (concat playlist-base-url playlist-id)))
-            (push (elfeed-tube-channel-create
-                   :query q :author title :url q
-                   :feed feed)
-                  channels)
-          (push (elfeed-tube-channel-create
-                 :query q :url q
-                 :feed (concat playlist-base-url playlist-id))
-                channels)))
-
+        (let* ((playlist-id (match-string 1 q))
+               (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
+                                "/api/v1/playlists/"
+                                playlist-id
+                                "?fields=title,author"))
+               (feed (concat playlist-base-url playlist-id)))
+            (aio-select-add fetches
+                            (elfeed-tube--fetch-with-label
+                             `(:type playlist :feed ,feed :query ,q)
+                             #'elfeed-tube--aio-fetch
+                             api-url #'elfeed-tube--nrotate-invidious-servers))))
+       
        ((elfeed-tube--video-p q)
         (if-let* ((video-id (match-string 1 q))
                   (videos-url "/api/v1/videos/")
                   (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
                                    videos-url
                                    video-id
-                                   "?fields=author,authorUrl,authorId"))
-                  (data (aio-await (elfeed-tube--aio-fetch
-                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
-                  (author (plist-get data :author))
-                  (author-id (plist-get data :authorId))
-                  (author-url (plist-get data :authorUrl))
-                  (feed (concat channel-base-url author-id)))
-            (push (elfeed-tube-channel-create
-                   :query q :author author
-                   :url (concat "https://www.youtube.com" author-url)
-                   :feed feed)
-                  channels)
+                                   "?fields=author,authorUrl,authorId")))
+            (aio-select-add fetches
+                            (elfeed-tube--fetch-with-label
+                             `(:type video :query ,q)
+                             #'elfeed-tube--aio-fetch
+                             api-url #'elfeed-tube--nrotate-invidious-servers))
           (push (elfeed-tube-channel-create :query q)
                 channels)))
-
+       
        (t ;interpret as search query
-        (if-let* ((search-url "/api/v1/search")
-                  (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
-                                   search-url
-                                   "?q=" (url-hexify-string q)
-                                   "&type=channel&page=1"))
-                  (data (aio-await (elfeed-tube--aio-fetch
-                                    api-url #'elfeed-tube--nrotate-invidious-servers)))
-                  (chan-1 (and (> (length data) 0)
-                               (aref data 0)))
-                  (author (plist-get chan-1 :author))
-                  (author-id (plist-get chan-1 :authorId))
-                  (author-url (plist-get chan-1 :authorUrl))
-                  (feed (concat channel-base-url author-id)))
-            (push (elfeed-tube-channel-create
-                   :query q :author author
-                   :url (concat "https://www.youtube.com" author-url)
-                   :feed feed)
-                  channels)
-          (push (elfeed-tube-channel-create :query q)
-                channels)))))
+        (let* ((search-url "/api/v1/search")
+               (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
+                                search-url
+                                "?q=" (url-hexify-string q)
+                                "&type=channel&page=1")))
+            (aio-select-add fetches
+                            (elfeed-tube--fetch-with-label
+                             `(:type search :query ,q)
+                             #'elfeed-tube--aio-fetch
+                             api-url #'elfeed-tube--nrotate-invidious-servers))))))
+    
+    ;; Resolve all promises in the aio-select
+    (while (aio-select-promises fetches)
+      (pcase-let* ((`(,label . ,data)
+                    (aio-await (aio-await (aio-select fetches))))
+                   (q (plist-get label :query))
+                   (feed (plist-get label :feed)))
+        (pcase (plist-get label :type)
+          ('channel
+           (if-let ((author (plist-get data :author))
+                    (author-url (plist-get data :authorUrl)))
+               (push (elfeed-tube-channel-create
+                      :query q :author author
+                      :url  q
+                      :feed feed)
+                     channels)
+             (push (elfeed-tube-channel-create :query q :feed feed)
+                   channels)))
+          
+          ('playlist
+           (if-let ((title (plist-get data :title))
+                    (author (plist-get data :author)))
+               (push (elfeed-tube-channel-create
+                      :query q :author title :url q
+                      :feed feed)
+                     channels)
+             (push (elfeed-tube-channel-create
+                    :query q :url q
+                    :feed (concat playlist-base-url playlist-id))
+                   channels)))
+          ('video
+           (if-let* ((author (plist-get data :author))
+                     (author-id (plist-get data :authorId))
+                     (author-url (plist-get data :authorUrl))
+                     (feed (concat channel-base-url author-id)))
+               (push (elfeed-tube-channel-create
+                      :query q :author author
+                      :url (concat "https://www.youtube.com" author-url)
+                      :feed feed)
+                     channels)
+             (push (elfeed-tube-channel-create :query (plist-get label :query))
+                   channels)))
+          ('search
+           (if-let* ((chan-1 (and (> (length data) 0)
+                                  (aref data 0)))
+                     (author (plist-get chan-1 :author))
+                     (author-id (plist-get chan-1 :authorId))
+                     (author-url (plist-get chan-1 :authorUrl))
+                     (feed (concat channel-base-url author-id)))
+               (push (elfeed-tube-channel-create
+                      :query q :author author
+                      :url (concat "https://www.youtube.com" author-url)
+                      :feed feed)
+                     channels)
+             (push (elfeed-tube-channel-create :query q)
+                   channels))))))
+    
     (nreverse channels)))
 
 (defun elfeed-tube-add--display-channels (channels)
