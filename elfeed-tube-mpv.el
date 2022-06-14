@@ -179,7 +179,7 @@ session."
 		;; Create overlay
 		(unless (overlayp elfeed-tube-mpv--overlay)
 		  (save-excursion
-		    (beginning-of-buffer)
+		    (goto-char (point-min))
 		    (text-property-search-forward
 		     'timestamp)
 		    (setq elfeed-tube-mpv--overlay

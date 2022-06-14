@@ -148,9 +148,11 @@ when this is set to true."
   :type 'boolean)
 
 (defcustom elfeed-tube-auto-fetch-p t
-  "Fetch information automatically when updating Elfeed or opening entries.
+  "Fetch infor automatically when updating Elfeed or opening entries.
 
-This is a boolean. When set to t, video information will be fetched automatically when updating Elfeed or opening video entries that don't have metadata."
+This is a boolean. When set to t, video information will be
+fetched automatically when updating Elfeed or opening video
+entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
@@ -220,7 +222,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
 (defsubst elfeed-tube--get-video-id (entry)
   (when (elfeed-tube--youtube-p entry)
     (when-let* ((link (elfeed-entry-link entry))
-                (_ (string-match
+                (m (string-match
                     (concat
                      elfeed-tube-youtube-regexp
                      "\\(?:watch\\?v=\\)?"
@@ -330,7 +332,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
   (cl-assert (elfeed-entry-p entry))
   (cl-assert (elfeed-tube-item-p data-item))
   (when-let* ((video-id (elfeed-tube--get-video-id entry))
-              (_ (or force
+              (f (or force
                      (not (gethash video-id elfeed-tube--info-table)))))
     ;; (elfeed-tube--message
     ;;  (format "putting %s with data %S" video-id data-item))
@@ -367,7 +369,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
         (delete-region (point) (point-max))
         (replace-string-in-region "\n" "" (point-min) (point-max))
         (goto-char (point-min))
-        (condition-case error
+        (condition-case nil
             (json-parse-buffer :object-type 'plist
                                :array-type 'list)
           (json-parse-error (throw 'parse-error "json-parse-error")))))))
@@ -413,7 +415,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
               (beginning-of-line)))
           
           ;; Duration
-          (if-let ((_ (elfeed-tube-include-p 'duration))
+          (if-let ((d (elfeed-tube-include-p 'duration))
                    (duration
                     (or (and data-item (elfeed-tube-item-len data-item))
                         (elfeed-meta entry :duration))))
@@ -444,7 +446,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
                     (insert " " (apply #'propertize "[∗]" prop-list))))))
           
           ;; Thumbnail
-          (when-let ((_ (elfeed-tube-include-p 'thumbnail))
+          (when-let ((th (elfeed-tube-include-p 'thumbnail))
                      (thumb (or (and data-item (elfeed-tube-item-thumb data-item))
                                 (elfeed-meta entry :thumb))))
             (elfeed-insert-html (elfeed-tube--thumbnail-html thumb))
@@ -460,7 +462,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
           
           ;; Captions
           (elfeed-tube--with-db elfeed-tube--captions-db-dir
-            (when-let* ((_ (elfeed-tube-include-p 'captions))
+            (when-let* ((c (elfeed-tube-include-p 'captions))
                       (caption
                        (or (and data-item (elfeed-tube-item-caps data-item))
                            (and (when-let
@@ -512,7 +514,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
   (if  (and (listp caption)
             (eq (car-safe caption) 'transcript))
       (let ((caption-ordered
-             (cl-loop for (type (start dur) text) in (cddr caption)
+             (cl-loop for (type (start _) text) in (cddr caption)
                       with pstart = 0
                       for oldtime = 0 then time
                       for time = (string-to-number (cdr start))
@@ -570,7 +572,7 @@ This is a boolean. When set to t, video information will be fetched automaticall
                                                  elfeed-show-entry 20))
                          ""))))
 
-(defun elfeed-tube--caption-echo (win obj pos)
+(defun elfeed-tube--caption-echo (_ _ pos)
   (concat
    (let ((type (get-text-property pos 'type)))
      (when (not (eq type 'text))
@@ -661,7 +663,7 @@ The result is a plist with the following keys:
          (response (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
          (status-code (plist-get response :status-code)))
     (if-let*
-        ((_ (= status-code 200))
+        ((s (= status-code 200))
          (data (with-temp-buffer
                  (save-excursion (insert (plist-get response :content)))
                  (elfeed-tube--extract-captions-urls))))
@@ -728,7 +730,7 @@ The result is a plist with the following keys:
               (status-code (plist-get response :status-code))
               (content-json (plist-get response :content)))
     (if (= status-code 200)
-        (condition-case error
+        (condition-case nil
             (json-parse-string content-json
                            :object-type 'plist
                            :array-type 'list)
@@ -773,7 +775,7 @@ The result is a plist with the following keys:
 
 (defun elfeed-tube--npreprocess-captions (captions)
   (cl-loop for text-element in (cddr captions)
-           for (type time text) in (cddr captions)
+           for (_ _ text) in (cddr captions)
            do (setf (nth 2 text-element)
                     (cl-reduce
                      (lambda (accum reps)

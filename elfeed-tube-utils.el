@@ -32,7 +32,7 @@
   query author url feed)
 
 ;;;###autoload (autoload 'elfeed-tube-add-feeds "elfeed-tube-utils" "Add youtube feeds to the Elfeed database by QUERIES." t nil)
-(aio-defun elfeed-tube-add-feeds (queries &optional save)
+(aio-defun elfeed-tube-add-feeds (queries &optional _)
   "Add youtube feeds to the Elfeed database by QUERIES.
 
 Each query can be a video, playlist or channel URL and the
@@ -167,24 +167,22 @@ queries."
        tabulated-list-entries
        (cl-loop for channel in channels
                 for n upfrom 1
-                for author = (or (elfeed-tube-channel-url channel) notfound)
+                for author = (if-let ((url (elfeed-tube-channel-url channel)))
+                                 (list (elfeed-tube-channel-author channel)
+                                       'mouse-face 'highlight
+                                       'action
+                                       #'elfeed-tube-add--visit-channel
+                                       'follow-link t
+                                       'help-echo (elfeed-tube-channel-url channel))
+                                 notfound)
                 for feed = (or (elfeed-tube-channel-feed channel) notfound)
                 collect
                 `(,n
-                  [,(or (and
-                         (elfeed-tube-channel-author channel)
-                         (list (elfeed-tube-channel-author channel)
-                               'mouse-face 'highlight
-                               'action
-                               #'elfeed-tube-add--visit-channel
-                               'follow-link t
-                               'help-echo (elfeed-tube-channel-url channel)))
-                        notfound)
+                  [,author
                    ,(replace-regexp-in-string
                      elfeed-tube-youtube-regexp ""
                      (elfeed-tube-channel-query channel))
-                   ,(or (elfeed-tube-channel-feed channel)
-                        (propertize "Not found!" 'face 'error))])))
+                   ,feed])))
       (tabulated-list-init-header)
       (tabulated-list-print)
       (goto-address-mode 1)
@@ -224,19 +222,11 @@ queries."
       
       (goto-char (point-min))
       
-      ;; (let ((window (display-buffer buffer)))
-      ;;   ;; (set-window-dedicated-p window t)
-      ;;   buffer)
-      
-      (let ((window
-             (funcall
-              (if (bound-and-true-p demo-mode)
-                  #'switch-to-buffer
-                #'display-buffer)
-              buffer)))
-        buffer)
-      
-      )))
+      (funcall
+       (if (bound-and-true-p demo-mode)
+           #'switch-to-buffer
+         #'display-buffer)
+       buffer))))
 
 (defun elfeed-tube-add--visit-channel (button)
   (browse-url (button-get button 'help-echo)))
@@ -251,11 +241,10 @@ With optional prefix argument ARG, update these feeds and open Elfeed
 afterwards."
   (interactive "P")
   (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
-  (let* ((channels tabulated-list-entries)
-         authors feeds)
+  (let* ((channels tabulated-list-entries))
     (let ((inhibit-message t))
       (cl-loop for channel in channels
-               for (author query feed) = (append (cadr channel) nil)
+               for (_ _ feed) = (append (cadr channel) nil)
                do (elfeed-add-feed feed :save t)))
     (message "Added to elfeed-feeds.")
     (when arg (elfeed))))
@@ -281,10 +270,9 @@ With optional prefix argument ARG, update these feeds and open Elfeed
 afterwards."
   (interactive)
   (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
-  (let* ((channels tabulated-list-entries)
-         authors feeds)
+  (let* ((channels tabulated-list-entries))
     (cl-loop for channel in channels
-             for (author query feed) = (append (cadr channel) nil)
+             for (_ _ feed) = (append (cadr channel) nil)
              collect feed into feeds
              finally (kill-new (prin1-to-string feeds)))
     (message "Feed URLs saved to kill-ring.")))
