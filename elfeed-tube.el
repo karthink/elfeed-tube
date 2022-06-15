@@ -1004,6 +1004,7 @@ The result is a plist with the following keys:
                         (number-to-string (floor time))))))
 
 ;; Entry points
+;;;###autoload (autoload 'elfeed-tube-fetch "elfeed-tube" "Fetch youtube metadata for Youtube video or Elfeed entry ENTRIES." t nil)
 (aio-defun elfeed-tube-fetch (entries &optional force-fetch)
   "Fetch youtube metadata for Elfeed ENTRIES.
 
