@@ -389,5 +389,36 @@ This function returns a promise.
                         elfeed-tube-save-indicator nil))))
     (message "Not a youtube video URL, aborting.")))
 
+(defsubst elfeed-tube--line-at-point ()
+  (buffer-substring (line-beginning-position) (line-end-position)))
+
+(defun elfeed-tube-next-heading (&optional arg)
+  (interactive "p")
+  (unless arg (setq arg 1))
+  (let ((chapter (car (ensure-list (elfeed-tube--caption-get-face 'chapter)))))
+    (catch 'return
+      (dotimes (_ (abs arg))
+        (when (> arg 0) (end-of-line))
+        (if-let ((match
+                  (funcall (if (> arg 0)
+                               #'text-property-search-forward
+                             #'text-property-search-backward)
+                           'face `(shr-h1 shr-h2 shr-h3
+                                   message-header-name elfeed-tube-chapter-face)
+                           (lambda (tags face)
+                             (cl-loop for x in (if (consp face) face (list face))
+                                      thereis (memq x tags)))
+                           t)))
+            (goto-char
+             (if (> arg 0) (prop-match-beginning match) (prop-match-end match)))
+          (throw 'return nil))
+        (when (< arg 0) (beginning-of-line)))
+      (beginning-of-line)
+      (point))))
+
+(defun elfeed-tube-prev-heading (&optional arg)
+  (interactive "p")
+  (elfeed-tube-next-heading (- (or arg 1))))
+
 (provide 'elfeed-tube-utils)
 ;;; elfeed-tube-utils.el ends here

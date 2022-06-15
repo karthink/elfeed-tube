@@ -43,7 +43,7 @@
   :prefix "elfeed-tube-")
 
 (defcustom elfeed-tube-fields
-  '(duration thumbnail description captions)
+  '(duration thumbnail description captions chapters)
   "Metadata fields to fetch for youtube entries in Elfeed.
 
 This is a list of symbols. The ordering is not relevant.
@@ -193,16 +193,24 @@ entries that don't have metadata."
                                #'elfeed-tube--browse-at-time))
     map))
 
+(defface elfeed-tube-chapter-face
+  '((t :inherit (variable-pitch message-header-other) :weight bold))
+  "Face used for chapter headings displayed by Elfeed Tube.")
+
+(defface elfeed-tube-timestamp-face
+  '((t :inherit (variable-pitch message-header-other) :weight semi-bold))
+  "Face used for transcript timestamps displayed by Elfeed Tube.")
+
 (defvar elfeed-tube-caption-faces
   '((text      . variable-pitch)
-    (timestamp . (message-header-other :inherit variable-pitch
-                                       :weight semi-bold))
+    (timestamp . elfeed-tube-timestamp-face)
     (intro     . (variable-pitch :inherit shadow))
     (outro     . (variable-pitch :inherit shadow))
     (sponsor   . (variable-pitch :inherit shadow
                                  :strike-through t))
     (selfpromo . (variable-pitch :inherit shadow
-                                 :strike-through t))))
+                                 :strike-through t))
+    (chapter   . elfeed-tube-chapter-face)))
 
 ;; Helpers
 (defsubst elfeed-tube-include-p (field)
@@ -313,11 +321,13 @@ entries that don't have metadata."
     t))
 
 (defun elfeed-tube--gethash (entry)
+  "Get hashed elfeed-tube data for ENTRY."
   (cl-assert (elfeed-entry-p entry))
   (let ((video-id (elfeed-tube--get-video-id entry)))
     (gethash video-id elfeed-tube--info-table)))
 
 (defun elfeed-tube--puthash (entry data-item &optional force)
+  "Cache elfeed-dube-item DATA-ITEM for ENTRY."
   (cl-assert (elfeed-entry-p entry))
   (cl-assert (elfeed-tube-item-p data-item))
   (when-let* ((video-id (elfeed-tube--get-video-id entry))
@@ -328,11 +338,29 @@ entries that don't have metadata."
     (puthash video-id data-item elfeed-tube--info-table)))
 
 ;; Data munging
+(defun elfeed-tube--get-chapters (desc)
+  (with-temp-buffer
+    (let ((chapters))
+      (save-excursion (insert desc))
+      (while (re-search-forward
+              "<a href=.*?data-jump-time=\"\\([0-9]+\\)\".*?</a>.\\(.*\\)$" nil t)
+        (push (cons (match-string 1)
+                    (thread-last (match-string 2)
+                                 (replace-regexp-in-string
+                                  "&quot;" "\"")
+                                 (replace-regexp-in-string
+                                  "&#39;" "'")
+                                 (string-trim)))
+              chapters))
+      (nreverse chapters))))
+
 (defun elfeed-tube--parse-desc (api-data)
   (let* ((length-seconds (plist-get api-data :lengthSeconds))
+         (desc-html (plist-get api-data :descriptionHtml))
+         (chapters (elfeed-tube--get-chapters desc-html))
          (desc-html (replace-regexp-in-string
                      "\n" "<br>"
-                     (plist-get api-data :descriptionHtml)))
+                     desc-html))
          (thumb-alist '((large  . 2)
                         (medium . 3)
                         (small  . 4)))
@@ -345,7 +373,8 @@ entries that don't have metadata."
                     (plist-get api-data :videoThumbnails)
                     (aref thumb-size)
                     (plist-get :url))))
-    `(:length ,length-seconds :thumb ,thumb :desc ,desc-html)))
+    `(:length ,length-seconds :thumb ,thumb :desc ,desc-html
+      :chaps ,chapters)))
 
 (defun elfeed-tube--extract-captions-urls ()
   (catch 'parse-error
@@ -471,6 +500,11 @@ entries that don't have metadata."
           (if insertions
               (delete-region (point) (point-max))
             (insert (propertize "\n(empty)\n" 'face 'italic))))
+
+        (setq-local
+         imenu-prev-index-position-function #'elfeed-tube-prev-heading
+         imenu-extract-index-name-function #'elfeed-tube--line-at-point)
+        
         (goto-char (point-min))))))
 
 (defvar elfeed-tube--save-state-map
@@ -504,16 +538,27 @@ entries that don't have metadata."
             (eq (car-safe caption) 'transcript))
       (let ((caption-ordered
              (cl-loop for (type (start _) text) in (cddr caption)
+                      with chapters = (car-safe (cdr caption))
                       with pstart = 0
+                      for chapter = (car-safe chapters)
                       for oldtime = 0 then time
                       for time = (string-to-number (cdr start))
+                      for chap-begin-p =
+                      (and chapter
+                           (>= (floor time) (string-to-number (car chapter))))
 
-                      if (< (mod (floor time) 30) (mod (floor oldtime) 30))
+                      if (and
+                          (or chap-begin-p
+                              (< (mod (floor time) 30) (mod (floor oldtime) 30)))
+                          (> (abs (- time pstart)) 3))
                       collect (list pstart time para) into result and
                       do (setq para nil pstart time)
                       
+                      if chap-begin-p
+                      do (setq chapters (cdr-safe chapters))
+                      
                       collect (cons time
-                                    (propertize 
+                                    (propertize
                                      ;; (elfeed-tube--postprocess-captions text)
                                      (string-replace "\n" " " text)
                                      'face (elfeed-tube--caption-get-face type)
@@ -526,10 +571,23 @@ entries that don't have metadata."
                 (propertize "Transcript:" 'face 'message-header-name)
                 "\n\n")
         (cl-loop for (start end para) in caption-ordered
+                 with chapters = (car-safe (cdr caption))
+                 for chapter = (car-safe chapters)
                  with beg = (point) do
                  (progn
+                   (when (and chapter (>= start (string-to-number (car chapter))))
+                     (insert (propertize (cdr chapter)
+                                         'face
+                                         (elfeed-tube--caption-get-face 'chapter)
+                                         'timestamp (string-to-number (car chapter))
+                                         'mouse-face 'highlight
+                                         'help-echo #'elfeed-tube--caption-echo
+                                         'keymap elfeed-tube-captions-map
+                                         'type 'chapter)
+                             (propertize "\n\n" 'hard t))
+                     (setq chapters (cdr chapters)))
                    (insert
-                    (propertize (format "[%s] - [%s]:\n"
+                    (propertize (format "[%s] - [%s]:"
                                         (elfeed-tube--timestamp start)
                                         (elfeed-tube--timestamp end))
                                 'face (elfeed-tube--caption-get-face
@@ -553,7 +611,7 @@ entries that don't have metadata."
                                      (fill-column w)
                                      (use-hard-newlines t))
                            (fill-region beg (point) nil t)))
-        ;; (goto-char (point-min))
+        
         )
     (elfeed-tube-log 'debug
                      "[Captions][video:%s][Not available]"
@@ -563,7 +621,7 @@ entries that don't have metadata."
 
 (defun elfeed-tube--caption-echo (_ _ pos)
   (concat
-   (let ((type (get-text-property pos 'type)))
+   (when-let ((type (get-text-property pos 'type)))
      (when (not (eq type 'text))
        (format "  segment: %s\n\n" (symbol-name type))))
    (let ((time (elfeed-tube--timestamp
@@ -856,7 +914,7 @@ The result is a plist with the following keys:
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
   (when (elfeed-tube--youtube-p entry)
     (let* ((cached (elfeed-tube--gethash entry))
-           desc thumb duration caps error)
+           desc thumb duration caps chaps error)
       
       ;; When to fetch a field:
       ;; - force-fetch is true: always fetch
@@ -872,7 +930,7 @@ The result is a plist with the following keys:
                  (or force-fetch
                      (not (or (and cached
                                    (or (cl-intersection
-                                        '(desc duration thumb)
+                                        '(desc duration thumb chapters)
                                         (elfeed-tube-item-error cached))
                                        (elfeed-tube-item-len cached)
                                        (elfeed-tube-item-desc cached)
@@ -891,7 +949,10 @@ The result is a plist with the following keys:
                       (plist-get api-data :desc)))
               (when (elfeed-tube-include-p 'duration)
                 (setf duration
-                      (plist-get api-data :length))))
+                      (plist-get api-data :length)))
+              (when (elfeed-tube-include-p 'chapters)
+                (setf chaps
+                      (plist-get api-data :chaps))))
           (setq error (append error '(desc duration thumb)))))
 
       ;; Record captions
@@ -904,7 +965,10 @@ The result is a plist with the following keys:
                                (elfeed-meta entry :caps))))))
         (if-let ((caps-new
                   (aio-await (elfeed-tube--fetch-captions entry))))
-            (setf caps caps-new)
+            (progn
+              (setf caps caps-new)
+              (when (and chaps (elfeed-tube-include-p 'chapters))
+                (setf (cadr caps) chaps)))
           (push 'caps error)))
 
       (if (and elfeed-tube-auto-save-p

@@ -18,9 +18,10 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
 - [[#features][Features]]
   - [[#fully-asynchronous-updates][Fully asynchronous updates]]
   - [[#description-and-other-metadata][Description and other metadata]]
-- [[#transcripts][Transcripts]]
-  - [[#noise-free-text-no-ad-reads][Noise-free text (No Ad reads)]]
+- [[#transcripts-that-are][Transcripts that are...]]
+  - [[#noise-free-no-ad-reads][Noise-free (No Ad reads)]]
   - [[#interactive][Interactive]]
+  - [[#navigable-with-imenu][Navigable with =imenu=]]
   - [[#live]["Live"]]
   - [[#archivable-and-retrievable][Archivable and retrievable]]
   - [[#searchable-and-org-linkable-its-just-an-emacs-buffer][Searchable and Org-linkable (It's just an Emacs buffer)]]
@@ -51,19 +52,18 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
 Like Elfeed, Elfeed Tube fetches all data asynchronously. /Emacs will not block/. (This gets top billing because I /know the pain/.)
 
 ** Description and other metadata
-Elfeed Tube adds the video duration, thumbnail and the video description to each Youtube entry in Elfeed. These elements can be turned off individually or tweaked to your liking.
+Elfeed Tube adds the video duration, thumbnail, video description and chapters to each Youtube entry in Elfeed. These elements can be turned off individually or tweaked to your liking.
 
 For example, you may prefer to avoid including video descriptions because they often have linkspam, or prefer larger thumbnails.
 
-* Transcripts
+* Transcripts that are...
 
 Youtube transcripts, including auto-generated ones, are automatically downloaded in your language of choice, formatted and displayed in your Elfeed buffers:
 
 #+html: <p align="center" width="100%"> <img src="media/elfeed-tube-captions-ar.jpg" width="50%"></img><img src="media/elfeed-tube-captions-en.jpg" width="50%"></img></p>
 #+html: <p align="center" width="100%"> <img src="https://user-images.githubusercontent.com/8607532/172851529-36fc092b-37bd-41d5-aa5d-4ee2ce169c39.jpg" width="50%"></img><img src="https://user-images.githubusercontent.com/8607532/172851684-547beab6-78b9-40f3-9c19-72201f9c89ac.jpg" width="50%"></img></p>
 
-These transcripts are:
-** Noise-free text (No Ad reads)
+** Noise-free (No Ad reads)
 There are no sponsor reads, ads or promotions in the transcript. These are automatically recognized and either greyed out or hidden from view. Here's an Ad read section that you now don't have to read:
 
 #+html: <p align="center"><img src="media/elfeed-tube-sblock.png" width="80%"></p>
@@ -79,6 +79,11 @@ Clicking on a transcript segment opens the video at that time in your browser or
 #+html: <p align="center"><img src="media/elfeed-tube-caption.png" width="80%"></p>
 
 You can also move your cursor there and press return (~RET~). The tool-tip provides more help.
+** Navigable with =imenu=
+Video chapters, when available, are included as headings in the transcript. The entry can be navigated through =imenu=. Here I jump between descriptions of different movies in this video:
+
+#+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/173894489-96b76165-a25d-4667-acd9-40131e80ca8b.mp4"></video></p>
+
 ** "Live"
 With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer:
 
@@ -309,9 +314,9 @@ You can call =elfeed-tube-fetch= outside of Elfeed to read an abritrary Youtube 
 Elfeed Tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
 
 ** Disabling fields
-Customize =elfeed-tube-fields=. To show only the duration and captions but no description or thumbnail:
+Customize =elfeed-tube-fields=. To show only the duration and captions but no description, thumbnail or chapter locations:
 #+BEGIN_SRC emacs-lisp
-  ;; Other options:  thumbnail, description
+  ;; Other options:  thumbnail, description, chapters
   (setq elfeed-tube-fields '(duration captions))
 #+END_SRC
 
