@@ -38,7 +38,7 @@
 
 ;; Customizatiion options
 (defgroup elfeed-tube nil
-  "Elfeed-tube: View youtube details in Elfeed"
+  "Elfeed-tube: View youtube details in Elfeed."
   :group 'elfeed
   :prefix "elfeed-tube-")
 
@@ -82,7 +82,7 @@ this to nil to disable showing thumbnails, but customize
 
 Setting this is optional: If left unset, elfeed-tube will locate
 and use an Invidious URL at random. This should be set to a
-string, for example \"https://invidio.us\". "
+string, for example \"https://invidio.us\"."
   :group 'elfeed-tube
   :type '(choice (string :tag "Custom URL")
                  (const :tag "Disabled (Auto)" nil)))
@@ -114,12 +114,11 @@ or a language name (case-insensitive, \"english\"):
 - \"pt-BR\" for Portugese (Brazil), etc
 
 Example:
-(\"tr\" \"es\" \"arabic\" \"english\" \"english (auto generated)\")
+ (\"tr\" \"es\" \"arabic\" \"english\" \"english (auto generated)\")
 
 NOTE: Language codes are safer to use. Language full names differ
 across regions. For example, \"english\" would be spelled
-\"englisch\" if you are in Germany.
-"
+\"englisch\" if you are in Germany."
   :group 'elfeed-tube
   :type '(repeat string))
 
@@ -183,6 +182,7 @@ entries that don't have metadata."
 
 (defun elfeed-tube-captions-browse-with (follow-fun)
   (lambda (event)
+    "Translate mouse event to point based button action."
     (interactive "e")
     (let ((pos (posn-point (event-end event))))
       (funcall follow-fun pos))))
@@ -270,20 +270,8 @@ entries that don't have metadata."
 (defsubst elfeed-tube--truncate (str)
   (truncate-string-to-width str 20))
 
-(defmacro elfeed-tube--debug (&rest body)
-  (declare (indent defun))
-  `(let ((entry (if (buffer-live-p (get-buffer "*elfeed-entry*"))
-                    (buffer-local-value
-                     'elfeed-show-entry
-                     (get-buffer "*elfeed-entry*"))
-                  (unless (buffer-live-p (get-buffer "*elfeed-search*"))
-                    (save-window-excursion (elfeed-search)))
-                  (with-current-buffer (get-buffer "*elfeed-search*")
-                    (elfeed-search-selected 'no-region)))))
-     ,@body))
-
 (defmacro elfeed-tube--with-db (db-dir &rest body)
-  "Execute BODY with DB-DIR set as the elfeed-db path."
+  "Execute BODY with DB-DIR set as the `elfeed-db-directory'."
   (declare (indent defun))
   `(let ((elfeed-db-directory ,db-dir))
      ,@body))
@@ -301,6 +289,7 @@ entries that don't have metadata."
 
 ;; Persistence
 (defun elfeed-tube--write-db (entry &optional data-item)
+  "Write struct DATA-ITEM to Elfeed ENTRY in `elfeed-db'."
   (cl-assert (elfeed-entry-p entry))
   (when-let* ((data-item (or data-item (elfeed-tube--gethash entry))))
     (when (elfeed-tube-include-p 'description)
@@ -609,7 +598,9 @@ entries that don't have metadata."
 
 ;; From aio-contrib.el: the workhorse
 (defun elfeed-tube-curl-enqueue (url &rest args)
-  "Like `elfeed-curl-enqueue' but delivered by a promise.
+  "Fetch URL with ARGS using Curl.
+
+Like `elfeed-curl-enqueue' but delivered by a promise.
 
 The result is a plist with the following keys:
 :success -- the callback argument (t or nil)
@@ -791,7 +782,7 @@ The result is a plist with the following keys:
            finally return captions))
 
 (defun elfeed-tube--sblock-captions (sblock captions)
-  ;; (prin1 (cl-subseq captions 0 5) (get-buffer "*scratch*"))
+  "Add sponsor data from SBLOCK into CAPTIONS."
   (let ((sblock-filtered
          (cl-loop for skip in sblock
                   for cat = (plist-get skip :category)
@@ -940,6 +931,7 @@ The result is a plist with the following keys:
 
 ;; Interaction
 (defun elfeed-tube--browse-at-time (pos)
+  "Browse video URL at POS at current time."
   (interactive "d")
   (when-let ((time (get-text-property pos 'timestamp)))
     (browse-url (concat "https://youtube.com/watch?v="

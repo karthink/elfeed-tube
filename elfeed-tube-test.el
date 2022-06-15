@@ -45,18 +45,37 @@ Tube."
 
 (ert-deftest elfeed-tube--persist-test ()
   "Test if data is persistent as expected."
-  (skip-unless (equal system-name "t143"))
-  (dolist (id '(("www.youtube.com" . "yt:video:SSg3T0aK-ck")
-                ("www.youtube.com" . "yt:video:nGlhMk1hEZw")
-                ("www.youtube.com" . "yt:video:_zJbi9YatcA")
-                ("www.youtube.com" . "yt:video:6kolTgj7uQc")
-                ("www.youtube.com" . "yt:video:19o8yPaVp58")
-                ("www.youtube.com" . "yt:video:swLyst02ZK4")
-                ("www.youtube.com" . "yt:video:N3Qlqv2vm0g")))
-    (let ((entry (elfeed-db-get-entry id)))
-      (should-not (null (elfeed-entry-content entry)))
-      (should-not (null (elfeed-meta entry :caps)))
-      (should-not (null (elfeed-meta entry :thumb)))))
+  (skip-unless (equal system-name "t14"))
+  (cl-loop for id in '(("www.youtube.com" . "yt:video:_bJeKUosqoY")
+                       ("www.youtube.com" . "yt:video:SSg3T0aK-ck")
+                       ("www.youtube.com" . "yt:video:swLyst02ZK4"))
+           for file in '("9d52d348f4ca01d6b6a72e4e27e48c51d5305c21"
+                         "9a540de06a0d0d2d6fbafc3cff1a191c2263e5d9"
+                         "8650958b89cbeee1fce8d13aa656829e91278621")
+           for pre = (substring file 0 2)
+           ;; Files should exist
+           do
+           (should (file-exists-p
+                    (file-name-concat
+                     elfeed-db-directory "data" pre file)))
+           do
+           (let ((entry (elfeed-db-get-entry id)))
+             ;; Ref should exist in index
+             (should-not (null (elfeed-entry-content entry)))
+             (should (string= file
+                              (elfeed-ref-id (elfeed-entry-content entry))))
+             
+             ;; Caps and thumbnail should exist
+             (should-not (null (elfeed-meta entry :caps)))
+             (let ((cap-file (elfeed-ref-id 
+                              (elfeed-meta entry :caps))))
+               (should (file-exists-p
+                        (file-name-concat
+                         elfeed-tube--captions-db-dir "data"
+                         (substring cap-file 0 2) cap-file))))
+             
+             (should (numberp (elfeed-meta entry :duration)))
+             (should-not (null (elfeed-meta entry :thumb)))))
   
   (dolist (id '(("www.youtube.com" . "yt:video:3fJhTu-0zmo")
                 ("www.youtube.com" . "yt:video:uXlQuTRSmzc")))
