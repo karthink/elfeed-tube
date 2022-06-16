@@ -49,14 +49,14 @@
   "List of command line arguments to pass to mpv.
 
 If the mpv library is available, these are appended to
-mpv-default-options. Otherwise mpv is started with these options.
+`mpv-default-options'. Otherwise mpv is started with these options.
 
 Each element in this list is a string. Examples:
 - \"--cache=yes\"
 - \"--osc=no\""
   :group 'elfeed-tube
   :type '(repeat string))
-(defvar elfeed-tube--mpv-available-p
+(defvar elfeed-tube-mpv--available-p
   (and (executable-find "mpv")
        (or (executable-find "youtube-dl")
            (executable-find "yt-dlp"))))
@@ -90,7 +90,7 @@ C-mouse-1: open at %s (mpv, new instance)
   (condition-case nil
       (apply #'string=
              (mapcar
-              (lambda (s) 
+              (lambda (s)
                 (replace-regexp-in-string
                  "&t=[0-9.]*" "" s))
               (list (mpv-get-property "path")
@@ -122,7 +122,7 @@ With prefix argument ARG always start a new, unnconnected mpv
 session."
   (interactive (list (point)
                      current-prefix-arg))
-  (if (not elfeed-tube--mpv-available-p)
+  (if (not elfeed-tube-mpv--available-p)
       (message "Could not find mpv + youtube-dl/yt-dlp in PATH.")
     (when-let* ((time (or (get-text-property pos 'timestamp) 0))
                 (entry (or elfeed-show-entry
@@ -160,6 +160,10 @@ session."
                                      'face 'error)))))))
 
 (defun elfeed-tube-mpv--follow (entry-playing)
+  "Folllow the ENTRY-PLAYING in mpv in Emacs.
+
+This function is intended to be run on a timer when
+`elfeed-tube-mpv-follow-mode' is active."
   (if (not (mpv-live-p))
       (elfeed-tube-mpv--overlay-clear)
     (when-let ((entry-buf (get-buffer
@@ -172,7 +176,7 @@ session."
 		  entry-playing)
 		 (eq (mpv-get-property "pause")
 		     json-false))
-	(condition-case nil 
+	(condition-case nil
 	    (when-let ((mpv-time (mpv-get-property "time-pos")))
 	      (with-current-buffer entry-buf
 
@@ -219,7 +223,8 @@ session."
 	  ('error nil))))))
 
 (defun elfeed-tube-mpv--where-internal (mpv-time)
-  (save-excursion 
+  "Return the point in the Elfeed buffer that corresponds to time MPV-TIME."
+  (save-excursion
       (while (not (get-text-property (point) 'timestamp))
         (goto-char (or (previous-single-property-change
 		        (point) 'timestamp)

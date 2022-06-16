@@ -407,7 +407,11 @@ entries that don't have metadata."
 
 ;; Content display
 (defun elfeed-tube-show (&optional intended-entry)
-  "Show extra video information in an elfeed-show buffer."
+  "Show extra video information in an Elfeed entry buffer.
+
+INTENDED-ENTRY is the Elfeed entry being shown. If it is not
+specified use the entry (if any) being displayed in the current
+buffer."
   (when-let* ((show-buf
                (if intended-entry
                    (get-buffer (elfeed-show--buffer-name intended-entry))
@@ -515,6 +519,7 @@ entries that don't have metadata."
     map))
 
 (defun elfeed-tube--insert-duration (entry duration)
+  "Insert the video DURATION for ENTRY into an Elfeed entry buffer."
   (if (not (integerp duration))
       (elfeed-tube-log
        'warn "[Duration][video:%s][Not available]"
@@ -534,6 +539,7 @@ entries that don't have metadata."
       t)))
 
 (defun elfeed-tube--insert-captions (caption)
+  "Insert the video CAPTION for ENTRY into an Elfeed entry buffer."
   (if  (and (listp caption)
             (eq (car-safe caption) 'transcript))
       (let ((caption-ordered
@@ -610,9 +616,7 @@ entries that don't have metadata."
                  finally (when-let* ((w shr-width)
                                      (fill-column w)
                                      (use-hard-newlines t))
-                           (fill-region beg (point) nil t)))
-        
-        )
+                           (fill-region beg (point) nil t))))
     (elfeed-tube-log 'debug
                      "[Captions][video:%s][Not available]"
                      (or (and elfeed-show-entry (truncate-string-to-width
@@ -633,6 +637,10 @@ entries that don't have metadata."
 
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)
+  "Fetch video information for Elfeed ENTRY and display it if possible.
+
+If ENTRY is not specified, use the entry (if any) corresponding
+to the current buffer."
   (when elfeed-tube-auto-fetch-p
     (aio-listen 
      (elfeed-tube--fetch-1 (or entry elfeed-show-entry))

@@ -156,8 +156,7 @@ queries."
     (nreverse channels)))
 
 (defun elfeed-tube-add--display-channels (channels)
-  (defsubst prophelp (s)
-    (propertize s 'face 'help-key-binding))
+  "Summarize found Youtube channel feeds CHANNELS."
   (let ((buffer (get-buffer-create "*Elfeed-Tube Channels*"))
         (notfound (propertize "Not found!" 'face 'error)))
     (with-current-buffer buffer
@@ -196,7 +195,7 @@ queries."
                          (or (and (elfeed-tube-channel-feed ch) 0) 1)))
                     channels :initial-value 0))
             (continue (propertize "C-c C-c" 'face 'help-key-binding))
-            (continue-extra (prophelp "C-u C-c C-c"))
+            (continue-extra (propertize "C-u C-c C-c" 'face 'help-key-binding))
             (cancel-q (propertize "q" 'face 'help-key-binding))
             (cancel   (propertize "C-c C-k" 'face 'help-key-binding))
             (copy     (propertize "C-c C-w" 'face 'help-key-binding)))
@@ -234,8 +233,7 @@ queries."
 ;; (elfeed-tube-add--display-channels my-channels)
 
 (defun elfeed-tube-add--confirm (&optional arg)
-  "Confirm the addition of visible Youtube feeds to the Elfeed
-database.
+  "Confirm the addition of visible Youtube feeds to the Elfeed database.
 
 With optional prefix argument ARG, update these feeds and open Elfeed
 afterwards."
@@ -288,8 +286,7 @@ ATTEMPTS more times. Return nil if all attempts fail. DESC is a
 description string to print to the elfeed-tube log allong with
 any other error messages.
 
-This function returns a promise.
-"
+This function returns a promise."
   (let ((attempts (or attempts (1+ elfeed-tube--max-retries))))
     (when (> attempts 0)
       (let* ((response
@@ -393,30 +390,37 @@ This function returns a promise.
   (buffer-substring (line-beginning-position) (line-end-position)))
 
 (defun elfeed-tube-next-heading (&optional arg)
+  "Jump to the next heading in an Elfeed entry.
+
+With numeric prefix argument ARG, jump forward that many times.
+If ARG is negative, jump backwards instead."
   (interactive "p")
   (unless arg (setq arg 1))
-  (let ((chapter (car (ensure-list (elfeed-tube--caption-get-face 'chapter)))))
-    (catch 'return
-      (dotimes (_ (abs arg))
-        (when (> arg 0) (end-of-line))
-        (if-let ((match
-                  (funcall (if (> arg 0)
-                               #'text-property-search-forward
-                             #'text-property-search-backward)
-                           'face `(shr-h1 shr-h2 shr-h3
-                                   message-header-name elfeed-tube-chapter-face)
-                           (lambda (tags face)
-                             (cl-loop for x in (if (consp face) face (list face))
-                                      thereis (memq x tags)))
-                           t)))
-            (goto-char
-             (if (> arg 0) (prop-match-beginning match) (prop-match-end match)))
-          (throw 'return nil))
-        (when (< arg 0) (beginning-of-line)))
-      (beginning-of-line)
-      (point))))
+  (catch 'return
+    (dotimes (_ (abs arg))
+      (when (> arg 0) (end-of-line))
+      (if-let ((match
+                (funcall (if (> arg 0)
+                             #'text-property-search-forward
+                           #'text-property-search-backward)
+                         'face `(shr-h1 shr-h2 shr-h3
+                                        message-header-name elfeed-tube-chapter-face)
+                         (lambda (tags face)
+                           (cl-loop for x in (if (consp face) face (list face))
+                                    thereis (memq x tags)))
+                         t)))
+          (goto-char
+           (if (> arg 0) (prop-match-beginning match) (prop-match-end match)))
+        (throw 'return nil))
+      (when (< arg 0) (beginning-of-line)))
+    (beginning-of-line)
+    (point)))
 
 (defun elfeed-tube-prev-heading (&optional arg)
+  "Jump to the previous heading in an Elfeed entry.
+
+With numeric prefix argument ARG, jump backward that many times.
+If ARG is negative, jump forward instead."
   (interactive "p")
   (elfeed-tube-next-heading (- (or arg 1))))
 
