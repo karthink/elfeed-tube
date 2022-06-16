@@ -26,6 +26,8 @@
 (require 'rx)
 (require 'aio)
 
+(declare-function elfeed-tube--fetch-with-label "elfeed-tube")
+
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
                                    (:copier nil))
   "Struct to hold youtube channel information."
@@ -162,7 +164,7 @@ queries."
                      channels)
              (push (elfeed-tube-channel-create
                     :query q :url q
-                    :feed (concat playlist-base-url playlist-id))
+                    :feed feed)
                    channels)))
           ('video
            (if-let* ((author (plist-get data :author))
