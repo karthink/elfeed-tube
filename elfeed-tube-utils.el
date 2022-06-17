@@ -345,6 +345,7 @@ This function returns a promise."
         (cl-letf* ((elfeed-show-unique-buffers t)
                    (elfeed-show-entry-switch #'display-buffer)
                    (elfeed-tube-save-indicator nil)
+                   (elfeed-tube-auto-save-p nil)
                    (api-data (aio-await
                               (elfeed-tube--aio-fetch
                                (concat (aio-await (elfeed-tube--get-invidious-url))
