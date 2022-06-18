@@ -334,7 +334,7 @@ Control the size with =elfeed-tube-thumbnail-size=.
 #+END_SRC
 **** Sponsored segments
 - =elfeed-tube-captions-sblock-p= controls whether sponsored segments of videos are de-emphasized in the transcript.
-- =elfeed-tube-caption-faces=: Faces to use for different types of transcript segments.
+- =elfeed-tube-captions-faces=: Faces to use for different types of transcript segments.
 
 ** Persistence
 Set the boolean =elfeed-tube-auto-save-p= to =t= to automatically save fetched information to the Elfeed database.
@@ -406,6 +406,9 @@ The top comments are occasionally useful, especially on technical videos. I migh
 
 * COMMENT Notes
 
+** TODO Fix persistence bug
+It disappears from the index first, then from the content store when =elfeed-db-gc== runs.
+
 ** TODO Specify what data to fetch per feed instead of globally.
 ** TODO Elfeed search keyword for video duration:
 ("=crafters <25min" should return videos in the Elfeed DB from the "System Crafters" Youtube channel feed that are under 25 minutes long, etc.)
@@ -413,19 +416,6 @@ The top comments are occasionally useful, especially on technical videos. I migh
 ** TODO Support for Youtube's official API
 ** TODO Re-punctuating auto-generated captions
 Using a [[https://github.com/ottokart/punctuator2][punctuator2]] web service
-
-** TODO Chapter extraction
-From the descriptions.
-- Store these or generate in =elfeed-tube-show=?
-
-** TODO Chapter display
-- User option for timestamp chunking
-- Formatting this and timestamps simultaneously?
-
-** TODO =imenu= support
-Headings:
-- All message-header-name fields
-- Chapters?
 
 ** TODO Backfill Youtube feeds
 ** TODO Download features [0/3]
@@ -436,6 +426,22 @@ Headings:
 - Display as enclosures?
 *** TODO Download region?
 *** TODO User option for download formats?
+
+** DONE Chapter extraction
+CLOSED: [2022-06-18 Sat 23:07]
+From the descriptions.
+- Store these or generate in =elfeed-tube-show=?
+  Ended up storing them in the captions data structure.
+** DONE Chapter display [2/2]
+CLOSED: [2022-06-18 Sat 23:07]
+- [X] User option for timestamp chunking
+- [X] Formatting this and timestamps simultaneously?
+
+** DONE =imenu= support [2/2]
+CLOSED: [2022-06-18 Sat 22:58]
+Headings:
+- [X] All message-header-name fields
+- [X] Chapters?
 
 ** Local
 # Local Variables:

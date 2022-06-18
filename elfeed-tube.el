@@ -160,6 +160,14 @@ entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
+(defcustom elfeed-tube-captions-chunk-time 30
+  "Chunk size used when displaying video transcripts.
+
+This is the number of seconds of the transcript to chunk into
+paragraphs or sections. It must be a positive integer."
+  :group 'elfeed-tube
+  :type 'integer)
+
 ;; Internal variables
 (defvar elfeed-tube--api-videos-path "/api/v1/videos/")
 (defvar elfeed-tube--info-table (make-hash-table :test #'equal))
@@ -201,7 +209,7 @@ entries that don't have metadata."
   '((t :inherit (variable-pitch message-header-other) :weight semi-bold))
   "Face used for transcript timestamps displayed by Elfeed Tube.")
 
-(defvar elfeed-tube-caption-faces
+(defvar elfeed-tube-captions-faces
   '((text      . variable-pitch)
     (timestamp . elfeed-tube-timestamp-face)
     (intro     . (variable-pitch :inherit shadow))
@@ -285,7 +293,7 @@ entries that don't have metadata."
      ,@body))
 
 (defsubst elfeed-tube--caption-get-face (type)
-  (or (alist-get type elfeed-tube-caption-faces)
+  (or (alist-get type elfeed-tube-captions-faces)
       'variable-pitch))
 
 ;; Data structure
@@ -555,7 +563,10 @@ buffer."
 
                       if (and
                           (or chap-begin-p
-                              (< (mod (floor time) 30) (mod (floor oldtime) 30)))
+                              (< (mod (floor time)
+                                      elfeed-tube-captions-chunk-time)
+                                 (mod (floor oldtime)
+                                      elfeed-tube-captions-chunk-time)))
                           (> (abs (- time pstart)) 3))
                       collect (list pstart time para) into result and
                       do (setq para nil pstart time)
@@ -630,9 +641,9 @@ buffer."
        (format "  segment: %s\n\n" (symbol-name type))))
    (let ((time (elfeed-tube--timestamp
                 (get-text-property pos 'timestamp))))
-     (funcall elfeed-tube--caption-echo-message time))))
+     (funcall elfeed-tube--captions-echo-message time))))
 
-(defvar elfeed-tube--caption-echo-message
+(defvar elfeed-tube--captions-echo-message
   (lambda (time) (format "mouse-2: open at %s (web browser)" time)))
 
 ;; Setup

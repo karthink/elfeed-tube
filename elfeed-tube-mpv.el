@@ -78,7 +78,7 @@ entry.")
      (lambda (pos) (elfeed-tube-mpv pos t)))))
 
 (setq-default
- elfeed-tube--caption-echo-message
+ elfeed-tube--captions-echo-message
  (defsubst elfeed-tube-mpv--echo-message (time)
    (format
     "  mouse-1: open at %s (mpv)
