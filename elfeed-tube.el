@@ -351,13 +351,15 @@ paragraphs or sections. It must be a positive integer."
     (let ((chapters))
       (save-excursion (insert desc))
       (while (re-search-forward
-              "<a href=.*?data-jump-time=\"\\([0-9]+\\)\".*?</a>.\\(.*\\)$" nil t)
+              "<a href=.*?data-jump-time=\"\\([0-9]+\\)\".*?</a>\\(?:\\s-\\|\\s)\\|-\\)+\\(.*\\)$" nil t)
         (push (cons (match-string 1)
                     (thread-last (match-string 2)
                                  (replace-regexp-in-string
                                   "&quot;" "\"")
                                  (replace-regexp-in-string
                                   "&#39;" "'")
+                                 (replace-regexp-in-string
+                                  "&amp;" "&")
                                  (string-trim)))
               chapters))
       (nreverse chapters))))
@@ -589,6 +591,7 @@ buffer."
                 "\n\n")
         (cl-loop for (start end para) in caption-ordered
                  with chapters = (car-safe (cdr caption))
+                 with vspace = (propertize " " 'face 'variable-pitch)
                  for chapter = (car-safe chapters)
                  with beg = (point) do
                  (progn
@@ -622,7 +625,7 @@ buffer."
                                            'keymap
                                            elfeed-tube-captions-map))
                              para)
-                     " ")
+                     vspace)
                     (propertize "\n\n" 'hard t)))
                  finally (when-let* ((w shr-width)
                                      (fill-column w)
