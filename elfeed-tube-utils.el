@@ -26,7 +26,7 @@
 (require 'rx)
 (require 'aio)
 
-(declare-function elfeed-tube--fetch-with-label "elfeed-tube")
+(declare-function elfeed-tube--with-label "elfeed-tube")
 
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
                                    (:copier nil))
@@ -92,7 +92,7 @@ queries."
                                 "?q=" (url-hexify-string (match-string 1 q))
                                 "&type=channel&page=1")))
           (aio-select-add fetches
-                          (elfeed-tube--fetch-with-label
+                          (elfeed-tube--with-label
                            `(:type search :query ,q)
                            #'elfeed-tube--aio-fetch
                            api-url #'elfeed-tube--nrotate-invidious-servers))))
@@ -105,7 +105,7 @@ queries."
                                 "?fields=title,author"))
                (feed (concat playlist-base-url playlist-id)))
             (aio-select-add fetches
-                            (elfeed-tube--fetch-with-label
+                            (elfeed-tube--with-label
                              `(:type playlist :feed ,feed :query ,q)
                              #'elfeed-tube--aio-fetch
                              api-url #'elfeed-tube--nrotate-invidious-servers))))
@@ -118,7 +118,7 @@ queries."
                                    video-id
                                    "?fields=author,authorUrl,authorId")))
             (aio-select-add fetches
-                            (elfeed-tube--fetch-with-label
+                            (elfeed-tube--with-label
                              `(:type video :query ,q)
                              #'elfeed-tube--aio-fetch
                              api-url #'elfeed-tube--nrotate-invidious-servers))
@@ -132,7 +132,7 @@ queries."
                                 "?q=" (url-hexify-string q)
                                 "&type=channel&page=1")))
             (aio-select-add fetches
-                            (elfeed-tube--fetch-with-label
+                            (elfeed-tube--with-label
                              `(:type search :query ,q)
                              #'elfeed-tube--aio-fetch
                              api-url #'elfeed-tube--nrotate-invidious-servers))))))
