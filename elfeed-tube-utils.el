@@ -19,9 +19,9 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
-;; 
-
+;;
+;; Utilities for Elfeed Tube.
+;;
 ;;; Code:
 (require 'rx)
 (require 'aio)

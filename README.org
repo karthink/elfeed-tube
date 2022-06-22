@@ -14,7 +14,7 @@ Here is the same Youtube video entry in Elfeed without Elfeed Tube:
 
 Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well for channels/playlists with longer form videos, podcasts, technical talks and lectures. For an introduction to Elfeed and RSS feeds, see [[https://www.youtube.com/watch?v=oHfAht9uTx8][this video]] by Protesilaos Stavrou.
 
-* Contents                                                                 :TOC:
+* Contents :TOC:
 - [[#features][Features]]
   - [[#fully-asynchronous-updates][Fully asynchronous updates]]
   - [[#description-and-other-metadata][Description and other metadata]]
