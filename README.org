@@ -208,7 +208,9 @@ If you want "live" captions and better MPV support:
 
 #+END_SRC
 * Usage
-Elfeed Tube tries its best to work out of the box with no set up, but Step I below is unavoidable if you're starting fresh. If you already have Youtube feeds in your Elfeed feed list, you can go to Step II.
+*If you are already subscribed to Youtube RSS feeds using Elfeed, you can go to Step II.*
+
+Elfeed Tube tries its best to work out of the box with no set up, but Step I below is unavoidable if you're starting fresh.
 
 ** Step I: Add Youtube subscriptions to Elfeed
 Fortunately, Youtube still provides RSS feeds for channels and playlists. Unfortunately, Youtube doesn't make it easy to find them. 
@@ -246,7 +248,7 @@ See the docstring for more options.
 You can use a web service like https://rssbox.herokuapp.com/, or look in the HTML of a Youtube channel page if you like your web browser's element inspector!
 
 ** Step II: Use Elfeed as usual
-That's it. Assuming you've run =(elfeed-tube-setup)=, included in the above use-package block, there's nothing else to do.
+*That's it.* Assuming you've run =(elfeed-tube-setup)=, included in the above use-package block, there's nothing else to do.
 
 If you're new to Elfeed, you can start with =M-x elfeed=.
 
@@ -407,7 +409,7 @@ The top comments are occasionally useful, especially on technical videos. I migh
 * COMMENT Notes
 
 ** TODO Fix persistence bug
-It disappears from the index first, then from the content store when =elfeed-db-gc== runs.
+It disappears from the index first, then from the content store when =elfeed-db-gc= runs.
 
 ** TODO Specify what data to fetch per feed instead of globally.
 ** TODO Elfeed search keyword for video duration:
