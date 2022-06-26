@@ -95,6 +95,7 @@ C-mouse-1: open at %s (mpv, new instance)
     time time time)))
 
 (defsubst elfeed-tube-mpv--check-path (video-url)
+  "Check if currently playing mpv video matches VIDEO-URL."
   (condition-case nil
       (apply #'string=
              (mapcar
@@ -106,11 +107,13 @@ C-mouse-1: open at %s (mpv, new instance)
     ('error nil)))
 
 (defsubst elfeed-tube-mpv--set-timer (entry)
+  "Start mpv position update timer for ENTRY."
   (setq elfeed-tube-mpv--follow-timer
         (run-with-timer
          4 1.5 #'elfeed-tube-mpv--follow entry)))
 
 (defsubst elfeed-tube-mpv--overlay-clear ()
+  "Clear mpv position overlay."
   (progn (when (timerp elfeed-tube-mpv--follow-timer)
            (cancel-timer elfeed-tube-mpv--follow-timer))
          (when (overlayp elfeed-tube-mpv--overlay)
