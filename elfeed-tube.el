@@ -241,6 +241,7 @@ paragraphs or sections. It must be a positive integer."
              ""))
 
 (defun elfeed-tube-captions-browse-with (follow-fun)
+  "Return a command to browse thing at point with FOLLOW-FUN."
   (lambda (event)
     "Translate mouse event to point based button action."
     (interactive "e")
@@ -274,9 +275,11 @@ paragraphs or sections. It must be a positive integer."
 
 ;; Helpers
 (defsubst elfeed-tube-include-p (field)
+  "Check if FIELD should be fetched."
   (memq field elfeed-tube-fields))
 
 (defsubst elfeed-tube--get-entries ()
+  "Get elfeed entry at point or in active region."
   (pcase major-mode
     ('elfeed-search-mode
      (elfeed-search-selected))
@@ -284,10 +287,12 @@ paragraphs or sections. It must be a positive integer."
      (list elfeed-show-entry))))
 
 (defsubst elfeed-tube--youtube-p (entry)
+  "Check if ENTRY is a Youtube video entry."
   (string-match-p elfeed-tube-youtube-regexp
                   (elfeed-entry-link entry)))
 
 (defsubst elfeed-tube--get-video-id (entry)
+  "Get Youtube video ENTRY's video-id."
   (when (elfeed-tube--youtube-p entry)
     (when-let* ((link (elfeed-entry-link entry))
                 (m (string-match
@@ -299,33 +304,40 @@ paragraphs or sections. It must be a positive integer."
       (match-string 1 link))))
 
 (defsubst elfeed-tube--random-elt (collection)
+  "Random element from COLLECTION."
   (and collection
       (elt collection (cl-random (length collection)))))
 
 (defsubst elfeed-tube-log (level fmt &rest objects)
+  "Log OBJECTS with FMT at LEVEL using `elfeed-log'."
   (let ((elfeed-log-buffer-name "*elfeed-tube-log*")
         (elfeed-log-level 'debug))
     (apply #'elfeed-log level fmt objects)
     nil))
 
 (defsubst elfeed-tube--attempt-log (attempts)
+  "Format ATTEMPTS as a string."
   (format "(attempt %d/%d)"
           (1+ (- elfeed-tube--max-retries
                  attempts))
           elfeed-tube--max-retries))
 
 (defsubst elfeed-tube--thumbnail-html (thumb)
+  "HTML for inserting THUMB."
   (when (and (elfeed-tube-include-p 'thumbnail) thumb)
     (concat "<br><img src=\"" thumb "\"></a><br><br>")))
 
 (defsubst elfeed-tube--timestamp (time)
+  "Format for TIME as timestamp."
   (format "%d:%02d" (floor time 60) (mod time 60)))
 
 (defsubst elfeed-tube--same-entry-p (entry1 entry2)
+  "Test if elfeed ENTRY1 and ENTRY2 are the same."
   (equal (elfeed-entry-id entry1)
          (elfeed-entry-id entry2)))
 
 (defsubst elfeed-tube--match-captions-langs (lang el)
+  "Find caption track matching LANG in plist EL."
   (and (or (string-match-p
             lang
             (plist-get el :languageCode))
@@ -336,6 +348,7 @@ paragraphs or sections. It must be a positive integer."
        el))
 
 (defsubst elfeed-tube--truncate (str)
+  "Truncate STR."
   (truncate-string-to-width str 20))
 
 (defmacro elfeed-tube--with-db (db-dir &rest body)
@@ -345,6 +358,7 @@ paragraphs or sections. It must be a positive integer."
      ,@body))
 
 (defsubst elfeed-tube--caption-get-face (type)
+  "Get caption face for TYPE."
   (or (alist-get type elfeed-tube-captions-faces)
       'variable-pitch))
 
@@ -399,6 +413,7 @@ paragraphs or sections. It must be a positive integer."
 
 ;; Data munging
 (defun elfeed-tube--get-chapters (desc)
+  "Get chapter timestamps from video DESC."
   (with-temp-buffer
     (let ((chapters))
       (save-excursion (insert desc))
@@ -417,6 +432,7 @@ paragraphs or sections. It must be a positive integer."
       (nreverse chapters))))
 
 (defun elfeed-tube--parse-desc (api-data)
+  "Parse API-DATA for video description."
   (let* ((length-seconds (plist-get api-data :lengthSeconds))
          (desc-html (plist-get api-data :descriptionHtml))
          (chapters (elfeed-tube--get-chapters desc-html))
@@ -439,6 +455,7 @@ paragraphs or sections. It must be a positive integer."
       :chaps ,chapters)))
 
 (defun elfeed-tube--extract-captions-urls ()
+  "Extract captionn URLs from Youtube HTML."
   (catch 'parse-error
     (if (not (search-forward "\"captions\":" nil t))
         (throw 'parse-error "captions section not found")
@@ -457,6 +474,7 @@ paragraphs or sections. It must be a positive integer."
           (json-parse-error (throw 'parse-error "json-parse-error")))))))
 
 (defun elfeed-tube--postprocess-captions (text)
+  "Tweak TEXT for display in the transcript."
   (thread-last
     ;; (string-replace "\n" " " text)
     (replace-regexp-in-string "\n" " " text)
@@ -696,6 +714,7 @@ buffer."
   (lambda (time) (format "mouse-2: open at %s (web browser)" time)))
 
 (defun elfeed-tube--caption-echo (_ _ pos)
+  "Caption echo text at position POS."
   (concat
    (when-let ((type (get-text-property pos 'type)))
      (when (not (eq type 'text))
@@ -718,6 +737,11 @@ to the current buffer."
          (elfeed-tube-show (or entry elfeed-show-entry)))))))
 
 (defun elfeed-tube-setup ()
+  "Set up elfeed-tube.
+
+This does the following:
+- Enable fetching video metadata when running `elfeed-update'.
+- Enable showing video metadata in `elfeed-show' buffers if available."
   (add-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
   (advice-add 'elfeed-show-entry
               :after #'elfeed-tube--auto-fetch)
@@ -726,6 +750,7 @@ to the current buffer."
   t)
 
 (defun elfeed-tube-teardown ()
+  "Undo the effects of `elfeed-tube-setup'."
   (advice-remove elfeed-show-refresh-function #'elfeed-tube-show)
   (advice-remove 'elfeed-show-entry #'elfeed-tube--auto-fetch)
   (remove-hook 'elfeed-new-entry-hook #'elfeed-tube--auto-fetch)
@@ -779,6 +804,7 @@ The result is a plist with the following keys:
         (car servers))))
 
 (defsubst elfeed-tube--nrotate-invidious-servers ()
+  "Rotate the list of Invidious servers in place."
   (setq elfeed-tube--invidious-servers
         (nconc (cdr elfeed-tube--invidious-servers)
                (list (car elfeed-tube--invidious-servers)))))
@@ -900,6 +926,7 @@ The result is a plist with the following keys:
       parsed-caps)))
 
 (defun elfeed-tube--npreprocess-captions (captions)
+  "Preprocess CAPTIONS."
   (cl-loop for text-element in (cddr captions)
            for (_ _ text) in (cddr captions)
            do (setf (nth 2 text-element)

@@ -41,6 +41,7 @@
 (defvar elfeed-tube--max-retries)
 
 (defsubst elfeed-tube--ensure-list (var)
+  "Ensure VAR is a list."
   (if (listp var) var (list var)))
 
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
@@ -73,6 +74,7 @@ queries."
     (elfeed-tube-add--display-channels channels)))
 
 (defsubst elfeed-tube--video-p (cand)
+  "Check if CAND is a Youtube video URL."
   (string-match
    (concat
     elfeed-tube-youtube-regexp
@@ -81,6 +83,7 @@ queries."
    cand))
 
 (defsubst elfeed-tube--playlist-p (cand)
+  "Check if CAND is a Youtube playlist URL."
   (string-match
    (concat
     elfeed-tube-youtube-regexp
@@ -89,6 +92,7 @@ queries."
    cand))
 
 (defsubst elfeed-tube--channel-p (cand)
+  "Check if CAND is a Youtube channel URL."
   (string-match
    (concat
     elfeed-tube-youtube-regexp
@@ -307,6 +311,7 @@ queries."
        buffer))))
 
 (defun elfeed-tube-add--visit-channel (button)
+  "Activate BUTTON."
   (browse-url (button-get button 'help-echo)))
 
 ;; (elfeed-tube-add--display-channels my-channels)
@@ -446,6 +451,7 @@ This function returns a promise."
     (message "Not a youtube video URL, aborting.")))
 
 (defsubst elfeed-tube--line-at-point ()
+  "Get line around point."
   (buffer-substring (line-beginning-position) (line-end-position)))
 
 (defun elfeed-tube-next-heading (&optional arg)
