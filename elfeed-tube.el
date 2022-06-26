@@ -447,8 +447,10 @@ paragraphs or sections. It must be a positive integer."
           (throw 'parse-error "video details not found")
         (goto-char (match-beginning 0))
         (delete-region (point) (point-max))
-        (replace-string-in-region "\n" "" (point-min) (point-max))
         (goto-char (point-min))
+        (save-excursion
+          (while (search-forward "\n" nil t)
+            (delete-region (match-beginning 0) (match-end 0))))
         (condition-case nil
             (json-parse-buffer :object-type 'plist
                                :array-type 'list)
@@ -456,7 +458,8 @@ paragraphs or sections. It must be a positive integer."
 
 (defun elfeed-tube--postprocess-captions (text)
   (thread-last
-    (string-replace "\n" " " text)
+    ;; (string-replace "\n" " " text)
+    (replace-regexp-in-string "\n" " " text)
     (replace-regexp-in-string "\\bi\\b" "I")
     (replace-regexp-in-string
      (rx (group (syntax open-parenthesis))
@@ -468,6 +471,13 @@ paragraphs or sections. It must be a positive integer."
      "\\1")))
 
 ;; Content display
+(defvar elfeed-tube--save-state-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mouse-2] #'elfeed-tube-save)
+    ;; (define-key map (kbd "RET") #'elfeed-tube--browse-at-time)
+    (define-key map [follow-link] 'mouse-face)
+    map))
+
 (defun elfeed-tube-show (&optional intended-entry)
   "Show extra video information in an Elfeed entry buffer.
 
@@ -573,13 +583,6 @@ buffer."
         
         (goto-char (point-min))))))
 
-(defvar elfeed-tube--save-state-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [mouse-2] #'elfeed-tube-save)
-    ;; (define-key map (kbd "RET") #'elfeed-tube--browse-at-time)
-    (define-key map [follow-link] 'mouse-face)
-    map))
-
 (defun elfeed-tube--insert-duration (entry duration)
   "Insert the video DURATION for ENTRY into an Elfeed entry buffer."
   (if (not (integerp duration))
@@ -631,7 +634,7 @@ buffer."
                       collect (cons time
                                     (propertize
                                      ;; (elfeed-tube--postprocess-captions text)
-                                     (string-replace "\n" " " text)
+                                     (replace-regexp-in-string "\n" " " text)
                                      'face (elfeed-tube--caption-get-face type)
                                      'type type))
                       into para
@@ -689,6 +692,9 @@ buffer."
                                                  elfeed-show-entry 20))
                          ""))))
 
+(defvar elfeed-tube--captions-echo-message
+  (lambda (time) (format "mouse-2: open at %s (web browser)" time)))
+
 (defun elfeed-tube--caption-echo (_ _ pos)
   (concat
    (when-let ((type (get-text-property pos 'type)))
@@ -697,9 +703,6 @@ buffer."
    (let ((time (elfeed-tube--timestamp
                 (get-text-property pos 'timestamp))))
      (funcall elfeed-tube--captions-echo-message time))))
-
-(defvar elfeed-tube--captions-echo-message
-  (lambda (time) (format "mouse-2: open at %s (web browser)" time)))
 
 ;; Setup
 (defun elfeed-tube--auto-fetch (&optional entry)
@@ -1124,14 +1127,14 @@ If you want to always add this metadata to the database, consider
 setting `elfeed-tube-auto-save-p'. To customize what kinds of
 metadata are fetched, customize TODO
 `elfeed-tube-fields'."
-  (interactive (list (or (ensure-list (elfeed-tube--get-entries))
+  (interactive (list (or (elfeed-tube--ensure-list (elfeed-tube--get-entries))
                          (read-from-minibuffer "Youtube video URL: "))
                      current-prefix-arg))
   (if (not (listp entries))
       (elfeed-tube--fake-entry entries force-fetch)
     (if (not elfeed-tube-fields)
         (message "Nothing to fetch! Customize `elfeed-tube-fields'.")
-      (dolist (entry (ensure-list entries))
+      (dolist (entry (elfeed-tube--ensure-list entries))
         (aio-await (elfeed-tube--fetch-1 entry force-fetch))
         (elfeed-tube-show entry)))))
 

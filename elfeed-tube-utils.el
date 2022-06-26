@@ -29,9 +29,19 @@
 
 (declare-function elfeed-tube--with-label "elfeed-tube")
 (declare-function elfeed-tube--fetch-1 "elfeed-tube")
+(declare-function elfeed-tube-show "elfeed-tube")
+(declare-function elfeed-tube-curl-enqueue "elfeed-tube")
+(declare-function elfeed-tube--attempt-log "elfeed-tube")
+(declare-function elfeed-tube-log "elfeed-tube")
+(declare-function elfeed-tube--get-invidious-url "elfeed-tube")
+(declare-function elfeed-tube--nrotate-invidious-servers "elfeed-tube")
+
 (defvar elfeed-tube-youtube-regexp)
 (defvar elfeed-tube--api-videos-path)
 (defvar elfeed-tube--max-retries)
+
+(defsubst elfeed-tube--ensure-list (var)
+  (if (listp var) var (list var)))
 
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
                                    (:copier nil))
@@ -88,7 +98,7 @@ queries."
 
 (aio-defun elfeed-tube-add--get-channels (queries)
   (let* ((fetches (aio-make-select))
-         (queries (ensure-list queries))
+         (queries (elfeed-tube--ensure-list queries))
          (playlist-base-url
           "https://www.youtube.com/feeds/videos.xml?playlist_id=")
          (channel-base-url
@@ -326,9 +336,12 @@ afterwards."
           ("Query" 32 t)
           ("Feed URL" 30 nil)]))
 
-(define-key elfeed-tube-channels-mode-map (kbd "C-c C-k") #'kill-buffer)
-(define-key elfeed-tube-channels-mode-map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
-(define-key elfeed-tube-channels-mode-map (kbd "C-c C-w") #'elfeed-tube-add--copy)
+(defvar elfeed-tube-channels-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-k") #'kill-buffer)
+    (define-key map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
+    (define-key map (kbd "C-c C-w") #'elfeed-tube-add--copy)
+    map))
 
 (defun elfeed-tube-add--copy ()
   "Copy visible Youtube feeds to the kill ring as a list.
