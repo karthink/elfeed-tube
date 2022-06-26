@@ -35,10 +35,14 @@ Tube."
   (should (executable-find "curl"))
   (should (featurep 'elfeed))
   (should (featurep 'aio))
-  (message "Elfeed tube requirements satisfied")
-  
+  (message "Elfeed tube requirements satisfied"))
+
+(ert-deftest elfeed-tube-mpv--health-test ()
+  "Check if the local environment satisfies requirements for Elfeed
+Tube with mpv."
   (should (executable-find "mpv"))
   (should (featurep 'mpv))
+  (should (featurep 'elfeed-tube))
   (should (or (executable-find "youtube-dl")
               (executable-find "yt-dlp")))
   (message "Elfeed tube mpv requirements satisfied"))

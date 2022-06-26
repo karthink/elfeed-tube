@@ -25,8 +25,13 @@
 ;;; Code:
 (require 'rx)
 (require 'aio)
+(require 'elfeed)
 
 (declare-function elfeed-tube--with-label "elfeed-tube")
+(declare-function elfeed-tube--fetch-1 "elfeed-tube")
+(defvar elfeed-tube-youtube-regexp)
+(defvar elfeed-tube--api-videos-path)
+(defvar elfeed-tube--max-retries)
 
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
                                    (:copier nil))
@@ -56,6 +61,30 @@ queries."
   (message "Finding RSS feeds, hold tight!")
   (let ((channels (aio-await (elfeed-tube-add--get-channels queries))))
     (elfeed-tube-add--display-channels channels)))
+
+(defsubst elfeed-tube--video-p (cand)
+  (string-match
+   (concat
+    elfeed-tube-youtube-regexp
+    (rx (zero-or-one "watch?v=")
+        (group (1+ (not "&")))))
+   cand))
+
+(defsubst elfeed-tube--playlist-p (cand)
+  (string-match
+   (concat
+    elfeed-tube-youtube-regexp
+    "playlist\\?list="
+    (rx (group (1+ (not "&")))))
+   cand))
+
+(defsubst elfeed-tube--channel-p (cand)
+  (string-match
+   (concat
+    elfeed-tube-youtube-regexp
+    (rx "channel/"
+        (group (1+ (not "&")))))
+   cand))
 
 (aio-defun elfeed-tube-add--get-channels (queries)
   (let* ((fetches (aio-make-select))
@@ -349,30 +378,6 @@ This function returns a promise."
             (and (functionp next) (funcall next))
             (aio-await
              (elfeed-tube--aio-fetch url next desc (1- attempts)))))))))
-
-(defsubst elfeed-tube--video-p (cand)
-  (string-match
-   (concat
-    elfeed-tube-youtube-regexp
-    (rx (zero-or-one "watch?v=")
-        (group (1+ (not "&")))))
-   cand))
-
-(defsubst elfeed-tube--playlist-p (cand)
-  (string-match
-   (concat
-    elfeed-tube-youtube-regexp
-    "playlist\\?list="
-    (rx (group (1+ (not "&")))))
-   cand))
-
-(defsubst elfeed-tube--channel-p (cand)
-  (string-match
-   (concat
-    elfeed-tube-youtube-regexp
-    (rx "channel/"
-        (group (1+ (not "&")))))
-   cand))
 
 (aio-defun elfeed-tube--fake-entry (url &optional force-fetch)
   (string-match (concat elfeed-tube-youtube-regexp
