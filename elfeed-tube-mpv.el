@@ -8,6 +8,8 @@
 ;; Package-Requires: ((emacs "27.1") (elfeed-tube "0.10") (mpv "0.2.0"))
 ;; URL: https://github.com/karthink/elfeed-tube
 
+;; SPDX-License-Identifier: UNLICENSE
+
 ;; This file is NOT part of GNU Emacs.
 
 ;;; Commentary:

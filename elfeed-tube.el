@@ -8,6 +8,8 @@
 ;; Keywords: news, hypermedia, convenience
 ;; URL: https://github.com/karthink/elfeed-tube
 
+;; SPDX-License-Identifier: UNLICENSE
+
 ;; This file is NOT part of GNU Emacs.
 
 ;;; Commentary:
