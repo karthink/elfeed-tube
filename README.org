@@ -1,5 +1,9 @@
 #+title: Elfeed Tube: Youtube on /your/ terms
 
+:BADGE:
+[[https://melpa.org/#/elfeed-tube][file:https://melpa.org/packages/elfeed-tube-badge.svg]]
+:END:
+
 Elfeed Tube is an Emacs package for a richer, interactive, noise-free and fully text-capable interface to your Youtube subscriptions and playlists using Elfeed, the RSS feed reader for Emacs. Think of it as supercharging Elfeed, or perhaps a taste of what the RSS/Atom protocol /could have become today/ if it had continue to evolve.
 
 Elfeed Tube adds video descriptions, metadata and "live" transcripts (see below) for all Youtube video entries in Elfeed. Here is what a video entry looks like:
@@ -146,30 +150,31 @@ Combined with the text manipulation capabilities of Emacs, you can combine these
 - Want to focus playback to a certain part of the transcript? Narrow the buffer (~C-x n n~) to the region you want and turn on =elfeed-tube-mpv-follow-mode=.
   
 * Setup
-This package is not available on ELPA/MELPA yet. You can install it by cloning this repository and running =package-install-file= on this directory, or via Quelpa/Straight.
+Elfeed Tube is available on MELPA. After [[https://github.com/melpa/melpa#usage][adding MELPA to your package archives]], you can install it by running =M-x package-install⮐= =elfeed-tube= in Emacs, or by running the below =use-package= block(s).
+
+MPV integration with the live transcripts is provided separately as =elfeed-tube-mpv=, you can install it with =M-x package-install⮐= =elfeed-tube-mpv=. 
 
 *Requirements*:
 - Emacs 27.1 or newer
 - Curl
 
-*Dependencies*:
+*Dependencies* (automatically installed):
 - [[https://github.com/skeeto/elfeed][Elfeed]], the feed reader for Emacs.
 - [[https://github.com/skeeto/emacs-aio][aio]], the async-IO library for Emacs.
-Dependencies will be automatically installed if you install Elfeed Tube using a package manager (Straight or Quelpa, or Emacs' built-in package.el once this is on ELPA/MELPA.)
 
-*Dependencies*: (for "live" transcripts with =elfeed-tube-mpv=):
+For "live" transcripts with =elfeed-tube-mpv=:
 - [[https://github.com/kljohann/mpv.el][mpv]]: The mpv library for Emacs 
 - [[https://mpv.io/][MPV]] video player and [[https://youtube-dl.org/][youtube-dl]] (or [[https://github.com/yt-dlp/yt-dlp/][yt-dlp]])
 
 ** Set up with =use-package=
 #+BEGIN_SRC emacs-lisp
   (use-package elfeed-tube
-    ;; :straight (:host github :repo "karthink/elfeed-tube")
+    :ensure t ;; or :straight t
     :after elfeed
     :demand t
     :config
-    ;; (setq elfeed-tube-auto-save-p nil) ;; t is auto-save (not default)
-    ;; (setq elfeed-tube-auto-fetch-p t) ;;  t is auto-fetch (default)
+    ;; (setq elfeed-tube-auto-save-p nil) ; default value
+    ;; (setq elfeed-tube-auto-fetch-p t)  ; default value
     (elfeed-tube-setup)
 
     :bind (:map elfeed-show-mode-map
@@ -179,12 +184,11 @@ Dependencies will be automatically installed if you install Elfeed Tube using a 
            ("F" . elfeed-tube-fetch)
            ([remap save-buffer] . elfeed-tube-save)))
 #+END_SRC
-Remove the =:straight= directive if you install it manually.
 
 If you want "live" captions and better MPV support:
 #+BEGIN_SRC emacs-lisp
   (use-package elfeed-tube-mpv
-    ;; :straight (:host github :repo "karthink/elfeed-tube")
+    :ensure t ;; or :straight t
     :bind (:map elfeed-show-mode-map
                 ("C-c C-f" . elfeed-tube-mpv-follow-mode)
                 ("C-c C-w" . elfeed-tube-mpv-where)))
