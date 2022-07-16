@@ -322,6 +322,13 @@ afterwards."
     (message "Added to elfeed-feeds.")
     (when arg (elfeed))))
 
+(defvar elfeed-tube-channels-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-k") #'kill-buffer)
+    (define-key map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
+    (define-key map (kbd "C-c C-w") #'elfeed-tube-add--copy)
+    map))
+
 (define-derived-mode elfeed-tube-channels-mode tabulated-list-mode
   "Elfeed Tube Channels"
   (setq tabulated-list-use-header-line t ; default to no header
@@ -331,13 +338,6 @@ afterwards."
         '[("Channel" 22 t)
           ("Query" 32 t)
           ("Feed URL" 30 nil)]))
-
-(defvar elfeed-tube-channels-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-k") #'kill-buffer)
-    (define-key map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
-    (define-key map (kbd "C-c C-w") #'elfeed-tube-add--copy)
-    map))
 
 (defun elfeed-tube-add--copy ()
   "Copy visible Youtube feeds to the kill ring as a list.
