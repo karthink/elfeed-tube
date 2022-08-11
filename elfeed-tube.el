@@ -299,8 +299,7 @@ paragraphs or sections. It must be a positive integer."
 
 (defsubst elfeed-tube-log (level fmt &rest objects)
   "Log OBJECTS with FMT at LEVEL using `elfeed-log'."
-  (let ((elfeed-log-buffer-name "*elfeed-tube-log*")
-        (elfeed-log-level 'debug))
+  (let ((elfeed-log-buffer-name "*elfeed-tube-log*"))
     (apply #'elfeed-log level fmt objects)
     nil))
 
