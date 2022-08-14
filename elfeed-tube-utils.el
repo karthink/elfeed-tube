@@ -256,6 +256,11 @@ queries."
                      elfeed-tube-youtube-regexp ""
                      (elfeed-tube-channel-query channel))
                    ,feed])))
+      (setq tabulated-list-format
+            '[("Channel" 22 t)
+              ("Query" 32 t)
+              ("Feed URL" 30 nil)])
+
       (tabulated-list-init-header)
       (tabulated-list-print)
       (goto-address-mode 1)
@@ -295,6 +300,10 @@ queries."
       
       (goto-char (point-min))
       
+      (use-local-map (copy-keymap elfeed-tube-channels-mode-map))
+      (local-set-key (kbd "C-c C-c") #'elfeed-tube-add--confirm)
+      (local-set-key (kbd "C-c C-w") #'elfeed-tube-add--copy)
+      
       (funcall
        (if (bound-and-true-p demo-mode)
            #'switch-to-buffer
@@ -324,20 +333,14 @@ afterwards."
 
 (defvar elfeed-tube-channels-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-k") #'kill-buffer)
-    (define-key map (kbd "C-c C-c") #'elfeed-tube-add--confirm)
-    (define-key map (kbd "C-c C-w") #'elfeed-tube-add--copy)
+    (define-key map (kbd "C-c C-k") (lambda () (interactive) (quit-window 'kill-buffer)))
     map))
 
 (define-derived-mode elfeed-tube-channels-mode tabulated-list-mode
   "Elfeed Tube Channels"
   (setq tabulated-list-use-header-line t ; default to no header
-        header-line-format nil
         ;; tabulated-list--header-string nil
-        tabulated-list-format
-        '[("Channel" 22 t)
-          ("Query" 32 t)
-          ("Feed URL" 30 nil)]))
+        header-line-format nil))
 
 (defun elfeed-tube-add--copy ()
   "Copy visible Youtube feeds to the kill ring as a list.
@@ -388,6 +391,30 @@ This function returns a promise."
             (aio-await
              (elfeed-tube--aio-fetch url next desc (1- attempts)))))))))
 
+(defun elfeed-tube--entry-create (feed-id entry-data)
+  "Create an Elfeed entry from ENTRY-DATA for feed with id FEED-ID.
+
+FEED-ID is the id of the feed in the Elfeed database. ENTRY-DATA
+is a plist of video metadata."
+  (cl-assert (listp entry-data))
+  (cl-assert (plist-get entry-data :videoId))
+
+  (let* ((video-id (plist-get entry-data :videoId))
+         (link (format "https://www.youtube.com/watch?v=%s" video-id))
+         (title (plist-get entry-data :title))
+         (published (plist-get entry-data :published))
+         (author `((:name ,(plist-get entry-data :author)
+                    :uri ,feed-id))))
+    (elfeed-entry--create
+     :link link
+     :title title
+     :id `("www.youtube.com" . ,(concat "yt:video:" video-id))
+     :date published
+     :tags '(unread)
+     :content-type 'html
+     :meta `(:authors ,author)
+     :feed-id feed-id)))
+
 (aio-defun elfeed-tube--fake-entry (url &optional force-fetch)
   (string-match (concat elfeed-tube-youtube-regexp
                         (rx (zero-or-one "watch?v=")
@@ -407,23 +434,14 @@ This function returns a promise."
                                        video-id
                                        "?fields="
                                        ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
-                                       "title,author,authorUrl,published")
+                                       "title,author,authorUrl,published,videoId")
                                #'elfeed-tube--nrotate-invidious-servers)))
                    (feed-id (concat "https://www.youtube.com/feeds/videos.xml?channel_id="
                                     (nth 1 (split-string (plist-get api-data :authorUrl)
                                                          "/" t))))
                    (author `((:name ,(plist-get api-data :author)
                                     :uri ,feed-id)))
-                   (entry
-                    (elfeed-entry--create
-                     :link url
-                     :title (plist-get api-data :title)
-                     :id `("www.youtube.com" . ,(concat "yt:video:" video-id))
-                     :date (plist-get api-data :published)
-                     :tags '(youtube)
-                     :content-type 'html
-                     :meta `(:authors ,author)
-                     :feed-id feed-id))
+                   (entry (elfeed-tube--entry-create feed-id api-data))
                    ((symbol-function 'elfeed-entry-feed)
                     (lambda (_)
                       (elfeed-feed--create

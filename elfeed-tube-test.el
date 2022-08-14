@@ -173,7 +173,7 @@ Tube with mpv."
          (elfeed-tube-auto-save-p nil))
     
     (when (elfeed-tube--gethash entry)
-      (remhash (elfeed-tube--get-video-id entry) elfeed-tube--info-table))
+      (remhash (elfeed-tube--entry-video-id entry) elfeed-tube--info-table))
 
     (aio-wait-for (elfeed-tube--fetch-1 entry))
 

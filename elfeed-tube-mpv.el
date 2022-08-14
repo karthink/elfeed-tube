@@ -129,7 +129,7 @@ session."
     (when-let* ((time (or (get-text-property pos 'timestamp) 0))
                 (entry (or elfeed-show-entry
                            (elfeed-search-selected 'ignore-region)))
-                (video-id (elfeed-tube--get-video-id entry))
+                (video-id (elfeed-tube--entry-video-id entry))
                 (video-url (concat "https://youtube.com/watch?v="
                                    video-id
                                    "&t="
@@ -155,7 +155,7 @@ session."
               (elfeed-tube-mpv--set-timer entry)))
         (apply #'start-process
                (concat "elfeed-tube-mpv-"
-                       (elfeed-tube--get-video-id elfeed-show-entry))
+                       (elfeed-tube--entry-video-id elfeed-show-entry))
                nil "mpv" args)
         (message (concat "Starting new mpv instance: "
                          (propertize "Not connected to Elfeed ❌"
@@ -300,7 +300,7 @@ anywhere in the transcript to seek to that point in the video."
         (elfeed-tube-mpv-follow-mode -1))
        
        (t (if-let* ((entry elfeed-show-entry)
-                    (video-id (elfeed-tube--get-video-id entry))
+                    (video-id (elfeed-tube--entry-video-id entry))
                     (video-url
                      (concat "https://youtube.com/watch?v="
                              video-id)))

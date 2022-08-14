@@ -3,7 +3,7 @@
 ;; Copyright (C) 2022  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthik.chikmagalur@gmail.com>
-;; Version: 0.10
+;; Version: 0.15
 ;; Package-Requires: ((emacs "27.1") (elfeed "3.4.1") (aio "1.0"))
 ;; Keywords: news, hypermedia, convenience
 ;; URL: https://github.com/karthink/elfeed-tube
@@ -280,17 +280,21 @@ paragraphs or sections. It must be a positive integer."
   (string-match-p elfeed-tube-youtube-regexp
                   (elfeed-entry-link entry)))
 
-(defsubst elfeed-tube--get-video-id (entry)
+(defsubst elfeed-tube--entry-video-id (entry)
   "Get Youtube video ENTRY's video-id."
-  (when (elfeed-tube--youtube-p entry)
-    (when-let* ((link (elfeed-entry-link entry))
-                (m (string-match
-                    (concat
-                     elfeed-tube-youtube-regexp
-                     "\\(?:watch\\?v=\\)?"
-                     "\\([^?&]+\\)")
-                    link)))
-      (match-string 1 link))))
+  (when-let* (((elfeed-tube--youtube-p entry))
+              (link (elfeed-entry-link entry)))
+    (elfeed-tube--url-video-id link)))
+
+(defsubst elfeed-tube--url-video-id (url)
+  "Get YouTube video URL's video-id"
+  (and (string-match
+         (concat
+          elfeed-tube-youtube-regexp
+          "\\(?:watch\\?v=\\)?"
+          "\\([^?&]+\\)")
+         url)
+    (match-string 1 url)))
 
 (defsubst elfeed-tube--random-elt (collection)
   "Random element from COLLECTION."
@@ -385,14 +389,14 @@ paragraphs or sections. It must be a positive integer."
 (defun elfeed-tube--gethash (entry)
   "Get hashed elfeed-tube data for ENTRY."
   (cl-assert (elfeed-entry-p entry))
-  (let ((video-id (elfeed-tube--get-video-id entry)))
+  (let ((video-id (elfeed-tube--entry-video-id entry)))
     (gethash video-id elfeed-tube--info-table)))
 
 (defun elfeed-tube--puthash (entry data-item &optional force)
   "Cache elfeed-dube-item DATA-ITEM for ENTRY."
   (cl-assert (elfeed-entry-p entry))
   (cl-assert (elfeed-tube-item-p data-item))
-  (when-let* ((video-id (elfeed-tube--get-video-id entry))
+  (when-let* ((video-id (elfeed-tube--entry-video-id entry))
               (f (or force
                      (not (gethash video-id elfeed-tube--info-table)))))
     ;; (elfeed-tube--message
@@ -798,7 +802,7 @@ The result is a plist with the following keys:
                (list (car elfeed-tube--invidious-servers)))))
 
 (aio-defun elfeed-tube--fetch-captions-tracks (entry)
-  (let* ((video-id (elfeed-tube--get-video-id entry))
+  (let* ((video-id (elfeed-tube--entry-video-id entry))
          (url (format "https://youtube.com/watch?v=%s" video-id))
          (response (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
          (status-code (plist-get response :status-code)))
@@ -863,7 +867,7 @@ The result is a plist with the following keys:
               (api-url (url-encode-url
                         (concat elfeed-tube--sblock-url
                                 elfeed-tube--sblock-api-path
-                                "?videoID=" (elfeed-tube--get-video-id entry)
+                                "?videoID=" (elfeed-tube--entry-video-id entry)
                                 "&categories=" categories)))
               (response (aio-await (elfeed-tube-curl-enqueue
                                     api-url :method "GET")))
@@ -953,7 +957,7 @@ The result is a plist with the following keys:
 
 (aio-defun elfeed-tube--fetch-desc (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
-         (video-id (elfeed-tube--get-video-id entry)))
+         (video-id (elfeed-tube--entry-video-id entry)))
     (when (> attempts 0)
       (if-let ((invidious-url (aio-await (elfeed-tube--get-invidious-url))))
           (let* ((api-url (concat
@@ -1118,7 +1122,7 @@ The result is a plist with the following keys:
   (interactive "d")
   (when-let ((time (get-text-property pos 'timestamp)))
     (browse-url (concat "https://youtube.com/watch?v="
-                        (elfeed-tube--get-video-id elfeed-show-entry)
+                        (elfeed-tube--entry-video-id elfeed-show-entry)
                         "&t="
                         (number-to-string (floor time))))))
 
