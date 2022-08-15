@@ -17,7 +17,8 @@
 ;; only the latest 15 entries.
 ;;
 ;; Call `elfeed-tube-fill-feeds' in an Elfeed search or entry buffer to
-;; back-fill entries for the corresponding feed.
+;; back-fill entries for the corresponding feed. You can select a region of
+;; entries to fill all the corresponding feeds.
 ;;
 ;;; Code:
 
@@ -61,7 +62,7 @@ window will be shown before taking any action."
   (cl-loop for table-entry in tabulated-list-entries
            for feed-title = (car (aref (cadr table-entry) 0))
            collect (get-text-property 0 'feed feed-title) into feeds
-           finally do (elfeed-tube-log 'debug "[fill-confirm-feeds: %S]"
+           finally do (elfeed-tube-log 'debug "[(fill-confirm-feeds): %S]"
                                        (mapcar #'elfeed-feed-title feeds))
            finally do
            (progn
@@ -143,15 +144,25 @@ presently available in its RSS feed or in the Elfeed database."
                 (window-height . ,#'fit-window-to-buffer)
                 (body-function . ,#'select-window))))))
 
+(cl-deftype elfeed-tube-fill--api-data ()
+  `(satisfies
+   (lambda (coll)
+     (and (vectorp coll)
+          (or (= (length coll) 0)
+              (cl-every (lambda (vd) (and (plist-get vd :videoId)
+                                     (plist-get vd :published)
+                                     (plist-get vd :title)))
+                        coll))))))
+
 (aio-defun elfeed-tube--fill-feeds (feeds)
   "Find videos corresponding to the channels/playlists for Elfeed feeds FEEDS.
 
 Videos not already present will be added to the Elfeed database."
-  (cl-assert (not (null feeds)))
-  (cl-assert (listp feeds))
-  (cl-assert (elfeed-feed-p (car feeds)))
-
+  (cl-check-type feeds (and (not null) (not atom)))
+  (cl-check-type (car feeds) elfeed-feed)
+  
   (dolist (feed feeds)
+    (elfeed-tube-log 'debug "[(fill-feeds): Backfilling feed: %s]" (elfeed-feed-title feed))
     (let ((elfeed-tube-auto-fetch-p nil)
           (feed-url (elfeed-feed-url feed))
           (feed-id  (elfeed-feed-id feed))
@@ -166,14 +177,11 @@ Videos not already present will be added to the Elfeed database."
              (elfeed-tube--fill-feed-dates)
              (aio-await))))
 
-      (elfeed-tube-log 'debug "[(fill-feeds): Backfilling feed: %s]" feed-title)
-      (cl-assert (vectorp feed-entries-to-add))
-
+      (cl-check-type feed-entries-to-add elfeed-tube-fill--api-data
+                     "Missing video attributes (ID, Title or Publish Date).")
+      
       (if (= (length feed-entries-to-add) 0)
           (message "Nothing to retrieve for feed \"%s\" (%s)" feed-title feed-url)
-        (cl-assert (stringp (plist-get (aref feed-entries-to-add 0) :videoId)))
-        (cl-assert (integerp (plist-get (aref feed-entries-to-add 0) :published)))
-        (cl-assert (stringp (plist-get (aref feed-entries-to-add 0) :title)))
         (setq add-count (length feed-entries-to-add))
 
         (condition-case error
@@ -199,8 +207,8 @@ corresponding to videos already in the Elfeed database are
 filtered out.
 
 PAGE corresponds to the page number of results requested from the API."
-  (cl-assert (elfeed-feed-p feed))
-  (cl-assert (or (null page) (integerp page)))
+  (cl-check-type feed elfeed-feed "An Elfeed Feed")
+  (cl-check-type page (or null (integer 0 *)) "A positive integer.")
 
   (if-let* ((page (or page 1))
             (feed-url (elfeed-feed-url feed))
@@ -213,7 +221,7 @@ PAGE corresponds to the page number of results requested from the API."
                               "&page=" (number-to-string (or page 1))))
                             ((string-match "channel_id=\\(.*?\\)/*$" feed-url)
                              (concat
-                              (format elfeed-tube--api-videos-path
+                              (format elfeed-tube--api-channels-videos-path
                                       (match-string 1 feed-url))
                               "?fields="
                               "title,videoId,author,published"
@@ -235,18 +243,13 @@ PAGE corresponds to the page number of results requested from the API."
                 (concat (aio-await (elfeed-tube--get-invidious-url)) api-path)
                 #'elfeed-tube--nrotate-invidious-servers)))
              (api-data (pcase feed-type
-                         ('channel
-                          (cl-assert (vectorp api-data))
-                          (cl-assert (and (plist-get (aref api-data 0) :title)
-                                          (plist-get (aref api-data 0) :videoId)
-                                          (plist-get (aref api-data 0) :published)))
-                          api-data)
+                         ('channel api-data)
                          ('playlist
-                          (cl-assert (and (not (null api-data)) (listp api-data)))
-                          (cl-assert (vectorp (plist-get api-data :videos)))
+                          (cl-check-type api-data (and (not null) list))
                           (plist-get api-data :videos))))
              ((> (length api-data) 0)))
             (progn
+              (cl-check-type api-data elfeed-tube-fill--api-data)
               (elfeed-tube-log 'debug "[Backfilling: page %d][Fetched: %d entries]"
                                (or page 1) (length api-data))
               (vconcat
@@ -255,7 +258,7 @@ PAGE corresponds to the page number of results requested from the API."
                 api-data)
                (aio-await (elfeed-tube--fill-feed feed (1+ page)))))
           (make-vector 0 0)))
-    (elfeed-tube-log 'error "[No channel ID found][%s][%s]" feed-title feed-url)))
+    (elfeed-tube-log 'error "[Malformed/Not Youtube feed: %s][%s]" feed-title feed-url)))
 
 ;; api-data: vector(plist entries for feed videos) -> vector(plist entries for
 ;; feed videos with correct dates.)
@@ -265,37 +268,33 @@ PAGE corresponds to the page number of results requested from the API."
 API-DATA is a vector of plists, one per video. This function
 returns a vector of plists with video publish dates
 corrected/added as the value of the plist's :published key."
-  (let ((date-queries (aio-make-select))
-        (feed-videos-map (make-hash-table :test 'equal)))
+  (cl-check-type api-data elfeed-tube-fill--api-data)
+  (let ((date-queries)
+        (feed-videos-map (make-hash-table :test 'equal))
+        (fix-count 0))
 
     (if (= (length api-data) 0)
         api-data
       (progn
+        (elfeed-tube-log 'debug "[Fixing publish dates]")
         (cl-loop for video-plist across api-data
                  for video-id = (plist-get video-plist :videoId)
                  do (puthash video-id video-plist feed-videos-map)
-                 do (aio-await (aio-sleep 0.2 nil))
-                 do (aio-select-add
-                     date-queries
-                     (elfeed-tube--with-label
-                      video-id #'elfeed-tube--aio-fetch
-                      (concat (aio-await (elfeed-tube--get-invidious-url))
-                              elfeed-tube--api-videos-path
-                              video-id "?fields=published"))))
-
-        (while (aio-select-promises date-queries)
-          (pcase-let* ((`(,video-id . ,corrected-date)
-                        (aio-await (aio-await (aio-select date-queries))))
-                       (video-plist (gethash video-id feed-videos-map))
-
-                       (old-timestamp (plist-get video-plist :published))
-                       (new-timestamp))
+                 do (push (elfeed-tube--with-label
+                           video-id #'elfeed-tube--aio-fetch
+                           (concat (aio-wait-for (elfeed-tube--get-invidious-url))
+                                   elfeed-tube--api-videos-path
+                                   video-id "?fields=published"))
+                          date-queries))
+        
+        (dolist (promise (nreverse date-queries))
+          (pcase-let* ((`(,video-id . ,corrected-date) (aio-await promise))
+                       (video-plist (gethash video-id feed-videos-map)))
 
             (plist-put video-plist :published (plist-get corrected-date :published))
-
-            (setq new-timestamp (plist-get corrected-date :published))
-            (elfeed-tube-log 'debug "[video-id: %S][fix date: %S → %S]"
-                             video-id old-timestamp new-timestamp)))
+            (cl-incf fix-count)))
+        
+        (elfeed-tube-log 'debug "[Fixed publish dates for %d videos]" fix-count)
 
         (vconcat (hash-table-values feed-videos-map))))))
 
