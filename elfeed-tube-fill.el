@@ -55,7 +55,7 @@ window will be shown before taking any action."
         (elfeed-tube--fill-display-feeds feeds)
       (aio-await (elfeed-tube--fill-feeds feeds)))))
 
-(aio-defun elfeed-tube-fill--confirm ()
+(aio-defun elfeed-tube--fill-confirm ()
   "Back-fill video entries for the displayed Elfeed feeds."
   (interactive)
   (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
@@ -137,14 +137,14 @@ presently available in its RSS feed or in the Elfeed database."
       (goto-char (point-min))
 
       (use-local-map (copy-keymap elfeed-tube-channels-mode-map))
-      (local-set-key (kbd "C-c C-c") #'elfeed-tube-fill--confirm)
+      (local-set-key (kbd "C-c C-c") #'elfeed-tube--fill-confirm)
 
       (display-buffer
        buffer `(nil
                 (window-height . ,#'fit-window-to-buffer)
                 (body-function . ,#'select-window))))))
 
-(cl-deftype elfeed-tube-fill--api-data ()
+(cl-deftype elfeed-tube--fill-api-data ()
   `(satisfies
    (lambda (coll)
      (and (vectorp coll)
@@ -177,7 +177,7 @@ Videos not already present will be added to the Elfeed database."
              (elfeed-tube--fill-feed-dates)
              (aio-await))))
 
-      (cl-check-type feed-entries-to-add elfeed-tube-fill--api-data
+      (cl-check-type feed-entries-to-add elfeed-tube--fill-api-data
                      "Missing video attributes (ID, Title or Publish Date).")
       
       (if (= (length feed-entries-to-add) 0)
@@ -249,7 +249,7 @@ PAGE corresponds to the page number of results requested from the API."
                           (plist-get api-data :videos))))
              ((> (length api-data) 0)))
             (progn
-              (cl-check-type api-data elfeed-tube-fill--api-data)
+              (cl-check-type api-data elfeed-tube--fill-api-data)
               (elfeed-tube-log 'debug "[Backfilling: page %d][Fetched: %d entries]"
                                (or page 1) (length api-data))
               (vconcat
@@ -268,7 +268,7 @@ PAGE corresponds to the page number of results requested from the API."
 API-DATA is a vector of plists, one per video. This function
 returns a vector of plists with video publish dates
 corrected/added as the value of the plist's :published key."
-  (cl-check-type api-data elfeed-tube-fill--api-data)
+  (cl-check-type api-data elfeed-tube--fill-api-data)
   (let ((date-queries)
         (feed-videos-map (make-hash-table :test 'equal))
         (fix-count 0))
