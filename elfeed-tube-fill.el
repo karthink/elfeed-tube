@@ -12,9 +12,9 @@
 ;;; Commentary:
 ;;
 ;; This file contains commands to back-fill Elfeed YouTube feeds. Back-filling a
-;; feed fetches all entries for the corresponding YouTube channel or playlist
-;; and adds them to the Elfeed database. Youtube RSS feeds generally contain
-;; only the latest 15 entries.
+;; feed fetches all historical entries for the corresponding YouTube channel or
+;; playlist and adds them to the Elfeed database. Youtube RSS feeds generally
+;; contain only the latest 15 entries.
 ;;
 ;; Call `elfeed-tube-fill-feeds' in an Elfeed search or entry buffer to
 ;; back-fill entries for the corresponding feed. You can select a region of
@@ -27,6 +27,22 @@
 (declare-function elfeed-tube--get-entries "elfeed-tube")
 (defvar elfeed-tube--api-channels-videos-path "/api/v1/channels/videos/%s")
 (defvar elfeed-tube--api-playlists-videos-path "/api/v1/playlists/%s")
+(defvar elfeed-tube--fill-tags nil
+  "Alist of Elfeed feed-ids and tags to add.
+
+These tags (list of symbols) will be added when back-filling the
+corresponding feed.")
+
+
+(cl-deftype elfeed-tube--fill-api-data ()
+  `(satisfies
+   (lambda (coll)
+     (and (vectorp coll)
+      (or (= coll 0)
+              (cl-every (lambda (vd) (and (plist-get vd :videoId)
+                                     (plist-get vd :published)
+                                     (plist-get vd :title)))
+                        coll))))))
 
 ;;;###autoload (autoload 'elfeed-tube-fill-feeds "elfeed-tube-utils" "Fetch and add all channel videos for ENTRIES' feeds." t nil)
 (aio-defun elfeed-tube-fill-feeds (entries &optional interactive-p)
@@ -55,112 +71,13 @@ window will be shown before taking any action."
         (elfeed-tube--fill-display-feeds feeds)
       (aio-await (elfeed-tube--fill-feeds feeds)))))
 
-(aio-defun elfeed-tube--fill-confirm ()
-  "Back-fill video entries for the displayed Elfeed feeds."
-  (interactive)
-  (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
-  (cl-loop for table-entry in tabulated-list-entries
-           for feed-title = (car (aref (cadr table-entry) 0))
-           collect (get-text-property 0 'feed feed-title) into feeds
-           finally do (elfeed-tube-log 'debug "[(fill-confirm-feeds): %S]"
-                                       (mapcar #'elfeed-feed-title feeds))
-           finally do
-           (progn
-             (quit-window 'kill-buffer)
-             (message "Backfilling YouTube feeds...")
-             (aio-await (elfeed-tube--fill-feeds feeds))
-             (message "Backfilling Youtube feeds... done."))))
-
-(defun elfeed-tube--fill-display-feeds (feeds)
-  "Produce a summary of Elfeed FEEDS to be back-filled.
-
-Back-filling a YouTube feed will fetch all its videos not
-presently available in its RSS feed or in the Elfeed database."
-  (let ((buffer (get-buffer-create "*Elfeed-Tube Channels*")))
-    (with-current-buffer buffer
-      (let ((inhibit-read-only t)) (erase-buffer))
-      (elfeed-tube-channels-mode)
-
-      (setq tabulated-list-use-header-line t ; default to no header
-            header-line-format nil
-            ;; tabulated-list--header-string nil
-            tabulated-list-format
-            '[("Channel" 22 t)
-              ("#Entries" 10 t)
-              ("Feed URL" 30 nil)])
-
-      (setq
-       tabulated-list-entries
-       (cl-loop for feed in feeds
-                for n upfrom 1
-                for feed-url = (elfeed-feed-url feed)
-                for channel-id = (progn (string-match "=\\(.*?\\)$" feed-url)
-                                        (match-string 1 feed-url))
-                for feed-title = (list (propertize (elfeed-feed-title feed)
-                                                   'feed feed)
-                                       'mouse-face 'highlight
-                                       'action
-                                       #'elfeed-tube-add--visit-channel
-                                       'follow-link t
-                                       'help-echo
-                                       (or (and channel-id
-                                                (concat
-                                                 "https://www.youtube.com/channel/"
-                                                 channel-id))
-                                           ""))
-                for feed-count = (number-to-string (length (elfeed-feed-entries feed)))
-                collect
-                `(,n
-                  [,feed-title
-                   ,feed-count
-                   ,feed-url])))
-
-      (tabulated-list-init-header)
-      (tabulated-list-print)
-      (goto-address-mode 1)
-
-      (goto-char (point-max))
-      (let ((inhibit-read-only t)
-            (continue (propertize "C-c C-c" 'face 'help-key-binding))
-            (cancel-q (propertize "q" 'face 'help-key-binding))
-            (cancel   (propertize "C-c C-k" 'face 'help-key-binding)))
-
-        (let ((inhibit-message t)) (toggle-truncate-lines 1))
-        (insert "\n")
-        (insert
-           ;; (propertize
-           ;;  "All queries resolved successfully.\n\n"
-           ;;  'face 'success)
-           "     " continue ": Add ALL videos from these channels to Elfeed.\n")
-        (insert cancel-q " or " cancel ": Quit and cancel this operation.\n"))
-
-      (goto-char (point-min))
-
-      (use-local-map (copy-keymap elfeed-tube-channels-mode-map))
-      (local-set-key (kbd "C-c C-c") #'elfeed-tube--fill-confirm)
-
-      (display-buffer
-       buffer `(nil
-                (window-height . ,#'fit-window-to-buffer)
-                (body-function . ,#'select-window))))))
-
-(cl-deftype elfeed-tube--fill-api-data ()
-  `(satisfies
-   (lambda (coll)
-     (and (vectorp coll)
-          (or (= (length coll) 0)
-              (cl-every (lambda (vd) (and (plist-get vd :videoId)
-                                     (plist-get vd :published)
-                                     (plist-get vd :title)))
-                        coll))))))
-
 (aio-defun elfeed-tube--fill-feeds (feeds)
   "Find videos corresponding to the channels/playlists for Elfeed feeds FEEDS.
 
 Videos not already present will be added to the Elfeed database."
   (cl-check-type feeds (and (not null) (not atom)))
   (cl-check-type (car feeds) elfeed-feed)
-  
+
   (dolist (feed feeds)
     (elfeed-tube-log 'debug "[(fill-feeds): Backfilling feed: %s]" (elfeed-feed-title feed))
     (let ((elfeed-tube-auto-fetch-p nil)
@@ -179,7 +96,7 @@ Videos not already present will be added to the Elfeed database."
 
       (cl-check-type feed-entries-to-add elfeed-tube--fill-api-data
                      "Missing video attributes (ID, Title or Publish Date).")
-      
+
       (if (= (length feed-entries-to-add) 0)
           (message "Nothing to retrieve for feed \"%s\" (%s)" feed-title feed-url)
         (setq add-count (length feed-entries-to-add))
@@ -188,6 +105,12 @@ Videos not already present will be added to the Elfeed database."
             (thread-last
               feed-entries-to-add
               (cl-map 'list (apply-partially #'elfeed-tube--entry-create feed-id))
+              (cl-map 'list (lambda (entry)
+                              (setf (elfeed-entry-tags entry)
+                                    (or (alist-get feed-id elfeed-tube--fill-tags
+                                                   nil nil #'equal)
+                                        '(unread)))
+                              entry))
               (elfeed-db-add))
           (error (elfeed-handle-parse-error feed-url error)))
         ;; (prin1 feed-entries-to-add (get-buffer "*scratch*"))
@@ -195,8 +118,7 @@ Videos not already present will be added to the Elfeed database."
                          feed-title add-count)
         (message "Retrieved %d missing videos for feed \"%s\" (%s)"
                  add-count feed-title feed-url)
-        (run-hook-with-args 'elfeed-update-hooks feed-url))))
-  (elfeed-search-update :force))
+        (run-hook-with-args 'elfeed-update-hooks feed-url)))))
 
 ;; feed: elfeed-feed struct, page: int or nil -> vector(plist entries for feed videos not in db)
 (aio-defun elfeed-tube--fill-feed (feed &optional page)
@@ -286,17 +208,146 @@ corrected/added as the value of the plist's :published key."
                                    elfeed-tube--api-videos-path
                                    video-id "?fields=published"))
                           date-queries))
-        
+
         (dolist (promise (nreverse date-queries))
           (pcase-let* ((`(,video-id . ,corrected-date) (aio-await promise))
                        (video-plist (gethash video-id feed-videos-map)))
 
             (plist-put video-plist :published (plist-get corrected-date :published))
             (cl-incf fix-count)))
-        
+
         (elfeed-tube-log 'debug "[Fixed publish dates for %d videos]" fix-count)
 
         (vconcat (hash-table-values feed-videos-map))))))
+
+;; Back-fill GUI
+
+(defsubst elfeed-tube--fill-tags-strings (taglist)
+  "Convert a list of tags TAGLIST to a comma separated string."
+  (mapconcat
+   (lambda (s) (propertize (symbol-name s)
+                      'face 'elfeed-search-tag-face))
+   taglist ","))
+
+(defun elfeed-tube--fill-display-feeds (feeds)
+  "Produce a summary of Elfeed FEEDS to be back-filled.
+
+Back-filling a YouTube feed will fetch all its videos not
+presently available in its RSS feed or in the Elfeed database."
+  (let ((buffer (get-buffer-create "*Elfeed-Tube Channels*")))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t)) (erase-buffer))
+      (elfeed-tube-channels-mode)
+
+      (setq tabulated-list-use-header-line t ; default to no header
+            header-line-format nil
+            ;; tabulated-list--header-string nil
+            tabulated-list-format
+            '[("Channel" 22 t)
+              ("#Entries" 10 t)
+              ("Tags to apply" 30 nil)
+              ("Feed URL" 30 nil)])
+
+      (setq
+       tabulated-list-entries
+       (cl-loop for feed in feeds
+                for n upfrom 1
+                for feed-url = (elfeed-feed-url feed)
+                for channel-id = (progn (string-match "=\\(.*?\\)$" feed-url)
+                                        (match-string 1 feed-url))
+                for feed-title = (list (propertize (elfeed-feed-title feed)
+                                                   'feed feed)
+                                       'mouse-face 'highlight
+                                       'action
+                                       #'elfeed-tube-add--visit-channel
+                                       'follow-link t
+                                       'help-echo
+                                       (or (and channel-id
+                                                (concat
+                                                 "https://www.youtube.com/channel/"
+                                                 channel-id))
+                                           ""))
+                for feed-count = (number-to-string (length (elfeed-feed-entries feed)))
+                for feed-tags = (if-let ((taglist
+                                          (alist-get (elfeed-feed-id feed)
+                                                     elfeed-tube--fill-tags nil t #'equal)))
+                                    (elfeed-tube--fill-tags-strings taglist)
+                                  (propertize "unread" 'face 'elfeed-search-tag-face))
+                collect
+                `(,n
+                  [,feed-title
+                   ,feed-count
+                   ,feed-tags
+                   ,feed-url])))
+
+      (tabulated-list-init-header)
+      (tabulated-list-print)
+      (goto-address-mode 1)
+
+      (goto-char (point-max))
+      (let ((inhibit-read-only t)
+            (continue (propertize "C-c C-c" 'face 'help-key-binding))
+            (cancel-q (propertize "q" 'face 'help-key-binding))
+            (cancel   (propertize "C-c C-k" 'face 'help-key-binding)))
+
+        (let ((inhibit-message t)) (toggle-truncate-lines 1))
+        (insert "\n")
+        (insert
+         "      " (propertize "t" 'face 'help-key-binding)
+         " or "   (propertize "+" 'face 'help-key-binding)
+         ": Set tags to apply to back-filled entries for feed.\n\n"
+         "     " continue ": Add All (historical) videos from these channels to Elfeed.\n"
+         cancel-q " or " cancel ": Quit and cancel this operation.\n"))
+
+      (goto-char (point-min))
+
+      (use-local-map (copy-keymap elfeed-tube-channels-mode-map))
+      (local-set-key (kbd "C-c C-c") #'elfeed-tube--fill-confirm)
+      (local-set-key (kbd "+")       #'elfeed-tube--fill-tags-add)
+      (local-set-key (kbd "t")       #'elfeed-tube--fill-tags-add)
+
+      (display-buffer
+       buffer `(nil
+                (window-height . ,#'fit-window-to-buffer)
+                (body-function . ,#'select-window))))))
+
+(defun elfeed-tube--fill-tags-add ()
+  "Add tags to back-filled entries fetched for feed at point."
+  (interactive)
+  (when-let* ((entry (tabulated-list-get-entry))
+              (feed (thread-last (aref entry 0)
+                                 (car)
+                                 (get-text-property 0 'feed)))
+              (title (elfeed-feed-title feed))
+              (id    (elfeed-feed-id feed))
+              (tags  (read-from-minibuffer
+                      (format "Add tags for \"%s\" (comma separated): " title)
+                      (thread-last
+                        (or (alist-get id elfeed-tube--fill-tags nil t #'equal) '(unread))
+                        (mapcar #'symbol-name)
+                        (funcall (lambda (tg) (string-join tg ","))))))
+              (taglist (thread-last (split-string tags "," t "[ \f\t\n\r\v]+")
+                                    (mapcar #'intern-soft)
+                                    (elfeed-normalize-tags))))
+    (setf (alist-get (elfeed-feed-id feed) elfeed-tube--fill-tags nil nil #'equal)
+          taglist)
+    (tabulated-list-set-col 2 (elfeed-tube--fill-tags-strings taglist))))
+
+(aio-defun elfeed-tube--fill-confirm ()
+  "Back-fill video entries for the displayed Elfeed feeds."
+  (interactive)
+  (cl-assert (derived-mode-p 'elfeed-tube-channels-mode))
+  (cl-loop for table-entry in tabulated-list-entries
+           for feed-title = (car (aref (cadr table-entry) 0))
+           collect (get-text-property 0 'feed feed-title) into feeds
+           finally do (elfeed-tube-log 'debug "[(fill-confirm-feeds): %S]"
+                                       (mapcar #'elfeed-feed-title feeds))
+           finally do
+           (progn
+             (quit-window 'kill-buffer)
+             (message "Backfilling YouTube feeds...")
+             (aio-await (elfeed-tube--fill-feeds feeds))
+             (message "Backfilling Youtube feeds... done."))))
 
 (provide 'elfeed-tube-fill)
 ;;; elfeed-tube-fill.el ends here
