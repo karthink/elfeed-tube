@@ -36,6 +36,7 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
 - [[#usage][Usage]]
   - [[#step-i-add-youtube-subscriptions-to-elfeed][Step I: Add Youtube subscriptions to Elfeed]]
   - [[#step-ii-use-elfeed-as-usual][Step II: Use Elfeed as usual]]
+  - [[#optional-back-fill-youtube-feeds][(Optional) Back-fill YouTube feeds]]
   - [[#optional-for-live-captions-with-mpv][(Optional) For "Live" captions with MPV]]
   - [[#optional-view-entries-instead-of-auto-saving-them][(Optional) View entries instead of auto-saving them]]
   - [[#optional-fetch-manually][(Optional) Fetch manually]]
@@ -212,7 +213,7 @@ If you want "live" captions and better MPV support:
 
 #+END_SRC
 * Usage
-*If you are already subscribed to Youtube RSS feeds using Elfeed, you can go to Step II.*
+*If you are already subscribed to Youtube RSS feeds using Elfeed, you can skip to Step II.*
 
 Elfeed Tube tries its best to work out of the box with no set up, but Step I below is unavoidable if you're starting fresh.
 
@@ -257,6 +258,14 @@ You can use a web service like https://rssbox.herokuapp.com/, or look in the HTM
 If you're new to Elfeed, you can start with =M-x elfeed=.
 
 In case the fetch for a Youtube entry fails you can call =M-x elfeed-tube-fetch= with a prefix argument (~C-u F~ or ~C-u M-x elfeed-tube-fetch~) to force a refetch.
+
+** (Optional) Back-fill YouTube feeds
+While Elfeed is a vault, Youtube RSS feeds only contain the last 15 videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed. 
+
+Elfeed Tube provides a command to add all historical entries for Youtube feeds to Elfeed. Call =elfeed-tube-fill-feeds= in an Elfeed search or entry buffer to fetch all entries for the feed at point. You can do this for many feeds at once by selecting a region of entries.
+
+#+html: <p align="center"><img src="https://user-images.githubusercontent.com/8607532/184994136-2a36f81c-bb47-470f-86ca-0efd778f3b03.png"></p>
+# [[https://user-images.githubusercontent.com/8607532/184994136-2a36f81c-bb47-470f-86ca-0efd778f3b03.png]]
 
 ** (Optional) For "Live" captions with MPV
 For a "live" connection between the transcript and MPV:
@@ -380,11 +389,10 @@ The top comments are occasionally useful, especially on technical videos. I migh
 
 * Limitations
 1. Elfeed provides only metadata, not full-text search across your entries since it is (almost) a plain text database.
-2. While Elfeed is a vault, Youtube RSS feeds only contain the last dozen or so videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed, unless you can find feeds that include older content.
-3. There is no (user-facing) way to delete entries from an Elfeed database, so curate wisely! Note that my Elfeed database has about 32,000 entries across 272 feeds and it's very snappy so far.
-4. Only one MPV instance can be connected to a live transcript in an Emacs session at a time. This is a limitation of the =mpv= library. (You can spawn as many "non-live" instances as you want.)
-5. Live transcript seeking and tracking can have an error of ±1 second.
-6. Fetches can occasionally fail. If this happens you may need to call =M-x elfeed-tube-fetch= manually on an entry or selection of entries.
+2. There is no (user-facing) way to delete entries from an Elfeed database, so curate wisely! Note that my Elfeed database has about 32,000 entries across 272 feeds and it's very snappy so far.
+3. Only one MPV instance can be connected to a live transcript in an Emacs session at a time. This is a limitation of the =mpv= library. (You can spawn as many "non-live" instances as you want.)
+4. Live transcript seeking and tracking can have an error of ±1 second.
+5. Fetches can occasionally fail. If this happens you may need to call =M-x elfeed-tube-fetch= manually on an entry or selection of entries.
 * Planned features
 - [ ] Specify what data to fetch per feed instead of globally.
 - [ ] Elfeed search keyword for video duration: ("=crafters <25min" should return videos in the Elfeed DB from the "System Crafters" Youtube channel feed that are under 25 minutes long, etc.)
