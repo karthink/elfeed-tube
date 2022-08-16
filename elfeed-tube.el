@@ -287,7 +287,7 @@ paragraphs or sections. It must be a positive integer."
     (elfeed-tube--url-video-id link)))
 
 (defsubst elfeed-tube--url-video-id (url)
-  "Get YouTube video URL's video-id"
+  "Get YouTube video URL's video-id."
   (and (string-match
          (concat
           elfeed-tube-youtube-regexp
