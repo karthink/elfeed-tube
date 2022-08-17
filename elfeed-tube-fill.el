@@ -44,7 +44,7 @@ corresponding feed.")
                                      (plist-get vd :title)))
                         coll))))))
 
-;;;###autoload (autoload 'elfeed-tube-fill-feeds "elfeed-tube-utils" "Fetch and add all channel videos for ENTRIES' feeds." t nil)
+;;;###autoload (autoload 'elfeed-tube-fill-feeds "elfeed-tube-fill" "Fetch and add all channel videos for ENTRIES' feeds." t nil)
 (aio-defun elfeed-tube-fill-feeds (entries &optional interactive-p)
   "Fetch and add all channel videos for ENTRIES' feeds.
 
