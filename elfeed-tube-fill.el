@@ -38,7 +38,7 @@ corresponding feed.")
   `(satisfies
    (lambda (coll)
      (and (vectorp coll)
-      (or (= coll 0)
+          (or (= (length coll) 0)
               (cl-every (lambda (vd) (and (plist-get vd :videoId)
                                      (plist-get vd :published)
                                      (plist-get vd :title)))

@@ -311,12 +311,13 @@ You can independently control auto/manual fetching of info and auto/manual savin
 You can call =elfeed-tube-fetch= outside of Elfeed to read an abritrary Youtube video URL (not just feed entries) and produce an Elfeed-like entry buffer for it with description, other metadata and live transcripts etc. Essentially you can use Elfeed Tube as a Youtube viewer. This feature is currently experimental.
 ** Commands summary
 =elfeed-tube= commands:
-| Command                     | Description                                   | Where              | suggested key-binding   |
-|-----------------------------+-----------------------------------------------+--------------------+-------------------------|
-| =elfeed-tube-add-feeds=       | Find youtube feeds from search queries        | Anywhere in Emacs  | N/A                     |
-| =elfeed-tube-fetch=           | Fetch info for any video                      | Anywhere in Emacs  | N/A                     |
-| =elfeed-tube-fetch= (again)   | Fetch video info for Elfeed entry (optional)  | Anywhere in Elfeed | ~F~                       |
-| =elfeed-tube-save=            | Manually save entry to Elfeed DB (optional)   | In an Elfeed entry | ~C-x C-s~                 |
+| Command                     | Description                                  | Where              | suggested key-binding |
+|-----------------------------+----------------------------------------------+--------------------+-----------------------|
+| =elfeed-tube-add-feeds=     | Find youtube feeds from search queries       | Anywhere in Emacs  | N/A                   |
+| =elfeed-tube-fetch=         | Fetch info for any video                     | Anywhere in Emacs  | N/A                   |
+| =elfeed-tube-fetch= (again) | Fetch video info for Elfeed entry (optional) | Anywhere in Elfeed | ~F~                   |
+| =elfeed-tube-save=          | Manually save entry to Elfeed DB (optional)  | In an Elfeed entry | ~C-x C-s~             |
+| =elfeed-tube-fill-feeds=    | Back-fill Youtube feed entries               | Anywhere in Elfeed | N/A                   |
 
 =elfeed-tube-mpv= commands, for live transcripts
 | Command                     | Description                                   | Where              | suggested key-binding   |
