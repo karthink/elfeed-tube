@@ -43,6 +43,34 @@ corresponding feed.")
                                      (plist-get vd :title)))
                         coll))))))
 
+;; Progress reporting
+(defvar elfeed-tube--fill-header nil)
+
+(defun elfeed-tube--fill-header ()
+  "Display a progress header when filling feeds with elfeed-tube."
+  (apply #'concat `("Filling Feed: " ,@elfeed-tube--fill-header)))
+
+(defun elfeed-tube--fill-progress-update (pending &optional force-update)
+  "Update report of PENDING fetch jobs for `elfeed-tube-fill-feeds'.
+
+Optional argument FORCE-UPDATE will force redisplay of the header line."
+  (setf (cadr elfeed-tube--fill-header)
+        (cl-typecase pending
+          (integer
+           (concat (propertize " ...fetch metadata (" 'face 'shadow)
+                   (propertize (format "%d pending" pending)
+                               'face 'elfeed-search-unread-count-face)
+                   (propertize ")" 'face 'shadow)))
+          (vector (format " ...%d entries to fetch" (length pending)))
+          (string pending)))
+  (when force-update
+      (when-let* ((win (get-buffer-window "*elfeed-search*"))
+                  ((window-live-p win)))
+        (with-selected-window win (force-mode-line-update))))
+  pending)
+
+;; Feed filling
+
 ;;;###autoload (autoload 'elfeed-tube-fill-feeds "elfeed-tube-fill" "Fetch and add all channel videos for ENTRIES' feeds." t nil)
 (aio-defun elfeed-tube-fill-feeds (entries &optional interactive-p)
   "Fetch and add all channel videos for ENTRIES' feeds.
@@ -77,47 +105,72 @@ Videos not already present will be added to the Elfeed database."
   (cl-check-type feeds (and (not null) (not atom)))
   (cl-check-type (car feeds) elfeed-feed)
 
-  (dolist (feed feeds)
-    (elfeed-tube-log 'debug "[(fill-feeds): Backfilling feed: %s]" (elfeed-feed-title feed))
-    (let ((elfeed-tube-auto-fetch-p nil)
-          (feed-url (elfeed-feed-url feed))
-          (feed-id  (elfeed-feed-id feed))
-          (feed-title (elfeed-feed-title feed))
-          (add-count)
-          (feed-entries-to-add
-           (thread-first
-             (elfeed-tube--fill-feed feed)
-             (aio-await)
-             (cl-delete-duplicates :key (lambda (x) (plist-get x :videoId)) :test #'string=)
-             (vconcat)
-             (elfeed-tube--fill-feed-dates)
-             (aio-await))))
+  (advice-add elfeed-search-header-function :override
+              #'elfeed-tube--fill-header)
+  
+  (unwind-protect
+      (dolist (feed feeds)
+        (setq elfeed-tube--fill-header
+              (list (propertize (elfeed-feed-title feed) 'face 'elfeed-search-feed-face)
+                    ""))
+        (elfeed-tube-log 'debug "[(fill-feeds): Backfilling feed: %s]"
+                         (elfeed-feed-title feed))
+        (let ((elfeed-tube-auto-fetch-p nil)
+              (feed-url (elfeed-feed-url feed))
+              (feed-id  (elfeed-feed-id feed))
+              (feed-title (elfeed-feed-title feed))
+              (add-count)
+              (feed-entries-to-add
+               (thread-first
+                 (elfeed-tube--fill-feed feed)
+                 (aio-await)
+                 (cl-delete-duplicates :key (lambda (x) (plist-get x :videoId)) :test #'string=)
+                 (vconcat)
+                 (elfeed-tube--fill-progress-update 'redisplay)
+                 (elfeed-tube--fill-feed-dates)
+                 (aio-await))))
 
-      (cl-check-type feed-entries-to-add elfeed-tube--fill-api-data
-                     "Missing video attributes (ID, Title or Publish Date).")
+          (cl-check-type feed-entries-to-add elfeed-tube--fill-api-data
+                         "Missing video attributes (ID, Title or Publish Date).")
 
-      (if (= (length feed-entries-to-add) 0)
-          (message "Nothing to retrieve for feed \"%s\" (%s)" feed-title feed-url)
-        (setq add-count (length feed-entries-to-add))
+          (if (= (length feed-entries-to-add) 0)
+              (prog1 (elfeed-tube--fill-progress-update
+                      (propertize " ...nothing to retrieve." 'face 'shadow)
+                      'redisplay)
+                (message "Nothing to retrieve for feed \"%s\" (%s)" feed-title feed-url))
+            (setq add-count (length feed-entries-to-add))
+            (condition-case error
+                (prog1
+                    (thread-last
+                      feed-entries-to-add
+                      (cl-map 'list (apply-partially #'elfeed-tube--entry-create feed-id))
+                      (cl-map 'list (lambda (entry)
+                                      (setf (elfeed-entry-tags entry)
+                                            (or (alist-get feed-id elfeed-tube--fill-tags
+                                                           nil nil #'equal)
+                                                '(unread)))
+                                      entry))
+                      (elfeed-db-add))
+                  (elfeed-tube--fill-progress-update
+                   (concat
+                    (propertize " ...done (" 'face 'shadow)
+                    (propertize (format "added %d entries" add-count)
+                                'face 'elfeed-search-unread-count-face)
+                    (propertize ")" 'face 'shadow))
+                   'redisplay)
+                  (elfeed-tube-log 'debug "[(elfeed-db): Backfilling feed: %s][Added %d videos]"
+                                   feed-title add-count)
+                  (message "Retrieved %d missing videos for feed \"%s\" (%s)"
+                           add-count feed-title feed-url))
+              (error (elfeed-handle-parse-error feed-url error)))
+            (run-hook-with-args 'elfeed-update-hooks feed-url))
+          (aio-await (aio-sleep 0.8 nil))))
 
-        (condition-case error
-            (thread-last
-              feed-entries-to-add
-              (cl-map 'list (apply-partially #'elfeed-tube--entry-create feed-id))
-              (cl-map 'list (lambda (entry)
-                              (setf (elfeed-entry-tags entry)
-                                    (or (alist-get feed-id elfeed-tube--fill-tags
-                                                   nil nil #'equal)
-                                        '(unread)))
-                              entry))
-              (elfeed-db-add))
-          (error (elfeed-handle-parse-error feed-url error)))
-        ;; (prin1 feed-entries-to-add (get-buffer "*scratch*"))
-        (elfeed-tube-log 'debug "[(elfeed-db): Backfilling feed: %s][Added %d videos]"
-                         feed-title add-count)
-        (message "Retrieved %d missing videos for feed \"%s\" (%s)"
-                 add-count feed-title feed-url)
-        (run-hook-with-args 'elfeed-update-hooks feed-url)))))
+    (run-at-time 1.5 nil
+                 (lambda () 
+                   (advice-remove elfeed-search-header-function
+                                  #'elfeed-tube--fill-header)
+                   (setf elfeed-tube--fill-header nil)))))
 
 ;; feed: elfeed-feed struct, page: int or nil -> vector(plist entries for feed videos not in db)
 (aio-defun elfeed-tube--fill-feed (feed &optional page)
@@ -192,15 +245,19 @@ corrected/added as the value of the plist's :published key."
   (cl-check-type api-data elfeed-tube--fill-api-data)
   (let ((date-queries)
         (feed-videos-map (make-hash-table :test 'equal))
-        (fix-count 0))
+        (fix-count 0)
+        (total-count (length api-data)))
 
-    (if (= (length api-data) 0)
+    (if (= total-count 0)
         api-data
       (progn
         (elfeed-tube-log 'debug "[Fixing publish dates]")
         (cl-loop for video-plist across api-data
+                 for num upfrom 0
                  for video-id = (plist-get video-plist :videoId)
                  do (puthash video-id video-plist feed-videos-map)
+                 when (= (mod num 10) 0) do (aio-await (aio-sleep 1 nil))
+                 do (elfeed-tube--fill-progress-update num)
                  do (push (elfeed-tube--with-label
                            video-id #'elfeed-tube--aio-fetch
                            (concat (aio-wait-for (elfeed-tube--get-invidious-url))
@@ -211,9 +268,11 @@ corrected/added as the value of the plist's :published key."
         (dolist (promise (nreverse date-queries))
           (pcase-let* ((`(,video-id . ,corrected-date) (aio-await promise))
                        (video-plist (gethash video-id feed-videos-map)))
-
-            (plist-put video-plist :published (plist-get corrected-date :published))
-            (cl-incf fix-count)))
+            
+            (aio-await (aio-sleep 0.3 nil))
+            (elfeed-tube--fill-progress-update (- total-count fix-count) 'redisplay)
+            (cl-incf fix-count)
+            (plist-put video-plist :published (plist-get corrected-date :published))))
 
         (elfeed-tube-log 'debug "[Fixed publish dates for %d videos]" fix-count)
 
