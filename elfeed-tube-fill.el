@@ -154,8 +154,7 @@ Videos not already present will be added to the Elfeed database."
                   (elfeed-tube--fill-progress-update
                    (concat
                     (propertize " ...done (" 'face 'shadow)
-                    (propertize (format "added %d entries" add-count)
-                                'face 'elfeed-search-unread-count-face)
+                    (propertize (format "added %d entries" add-count) 'face 'success)
                     (propertize ")" 'face 'shadow))
                    'redisplay)
                   (elfeed-tube-log 'debug "[(elfeed-db): Backfilling feed: %s][Added %d videos]"
@@ -269,7 +268,6 @@ corrected/added as the value of the plist's :published key."
           (pcase-let* ((`(,video-id . ,corrected-date) (aio-await promise))
                        (video-plist (gethash video-id feed-videos-map)))
             
-            (aio-await (aio-sleep 0.3 nil))
             (elfeed-tube--fill-progress-update (- total-count fix-count) 'redisplay)
             (cl-incf fix-count)
             (plist-put video-plist :published (plist-get corrected-date :published))))
