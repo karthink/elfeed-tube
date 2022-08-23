@@ -641,6 +641,7 @@ buffer."
                       if chap-begin-p
                       do (setq chapters (cdr-safe chapters))
                       
+                      when text
                       collect (cons time
                                     (propertize
                                      ;; (elfeed-tube--postprocess-captions text)
@@ -921,17 +922,19 @@ The result is a plist with the following keys:
   "Preprocess CAPTIONS."
   (cl-loop for text-element in (cddr captions)
            for (_ _ text) in (cddr captions)
+           with reps-list = `(("\\bi\\b" . "I")
+                              (,(rx (group (syntax open-parenthesis))
+                                 (one-or-more (or space punct)))
+                               . "\\1")
+                              (,(rx (one-or-more (or space punct))
+                                 (group (syntax close-parenthesis)))
+                               . "\\1"))
+           when (cddr text-element)
            do (setf (nth 2 text-element)
                     (cl-reduce
                      (lambda (accum reps)
                        (replace-regexp-in-string (car reps) (cdr reps) accum))
-                     `(("\\bi\\b" . "I")
-                       (,(rx (group (syntax open-parenthesis))
-                             (one-or-more (or space punct)))
-                        . "\\1")
-                       (,(rx (one-or-more (or space punct))
-                             (group (syntax close-parenthesis)))
-                        . "\\1"))
+                     reps-list
                      :initial-value text))
            finally return captions))
 

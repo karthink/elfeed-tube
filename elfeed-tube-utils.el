@@ -456,7 +456,9 @@ is a plist of video metadata."
             (setq-local elfeed-show-refresh-function
                         (lambda () (interactive)
                           (elfeed-tube-show))
-                        elfeed-tube-save-indicator nil))))
+                        elfeed-tube-save-indicator nil)
+            (use-local-map (copy-keymap elfeed-show-mode-map))
+            (local-set-key (kbd "q") 'quit-window))))
     (message "Not a youtube video URL, aborting.")))
 
 (defsubst elfeed-tube--line-at-point ()
