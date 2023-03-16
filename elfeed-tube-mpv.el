@@ -110,6 +110,7 @@ C-mouse-1: open at %s (mpv, new instance)
          (when (overlayp elfeed-tube-mpv--overlay)
            (delete-overlay elfeed-tube-mpv--overlay))))
 
+;;;###autoload
 (defun elfeed-tube-mpv (pos &optional arg)
   "Start or seek an mpv session connected to an Elfeed entry.
 
@@ -273,6 +274,7 @@ This function is intended to be run on a timer when
       (pulse-momentary-highlight-one-line)))
    (t (message "Transcript location not found in buffer."))))
 
+;;;###autoload
 (define-minor-mode elfeed-tube-mpv-follow-mode
   "Follow along with mpv in elfeed-show buffers.
 
