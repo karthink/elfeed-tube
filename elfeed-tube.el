@@ -217,7 +217,7 @@ paragraphs or sections. It must be a positive integer."
 (defvar elfeed-tube--sblock-api-path "/api/skipSegments")
 (defvar elfeed-tube-captions-puntcuate-p t)
 (defvar elfeed-tube--api-video-fields
-  '("videoThumbnails" "descriptionHtml" "lengthSeconds"))
+  '("videoThumbnails" "description" "lengthSeconds"))
 (defvar elfeed-tube--max-retries 2)
 (defvar elfeed-tube--captions-db-dir
   ;; `file-name-concat' is 28.1+ only
@@ -410,23 +410,30 @@ paragraphs or sections. It must be a positive integer."
     (let ((chapters))
       (save-excursion (insert desc))
       (while (re-search-forward
-              "<a href=.*?data-jump-time=\"\\([0-9]+\\)\".*?</a>\\(?:\\s-\\|\\s)\\|-\\)+\\(.*\\)$" nil t)
-        (push (cons (match-string 1)
-                    (thread-last (match-string 2)
-                                 (replace-regexp-in-string
-                                  "&quot;" "\"")
-                                 (replace-regexp-in-string
-                                  "&#39;" "'")
-                                 (replace-regexp-in-string
-                                  "&amp;" "&")
-                                 (string-trim)))
+              ;; "<a href=.*?data-jump-time=\"\\([0-9]+\\)\".*?</a>\\(?:\\s-\\|\\s)\\|-\\)+\\(.*\\)$"
+              "\\([0-9]+?\\):\\([0-9]\\{2\\}\\) *\\(.*\\)$"
+              nil t)
+        (push (cons (number-to-string
+                     (+ (* 60 (string-to-number (match-string 1)))
+                        (string-to-number (match-string 2))))
+                    (match-string 3)
+                    ;; (match-string 1)
+                    ;; (thread-last (match-string 2)
+                    ;;              (replace-regexp-in-string
+                    ;;               "&quot;" "\"")
+                    ;;              (replace-regexp-in-string
+                    ;;               "&#39;" "'")
+                    ;;              (replace-regexp-in-string
+                    ;;               "&amp;" "&")
+                    ;;              (string-trim))
+                    )
               chapters))
       (nreverse chapters))))
 
 (defun elfeed-tube--parse-desc (api-data)
   "Parse API-DATA for video description."
   (let* ((length-seconds (plist-get api-data :lengthSeconds))
-         (desc-html (plist-get api-data :descriptionHtml))
+         (desc-html (plist-get api-data :description))
          (chapters (elfeed-tube--get-chapters desc-html))
          (desc-html (replace-regexp-in-string
                      "\n" "<br>"
