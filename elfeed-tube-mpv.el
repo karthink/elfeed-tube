@@ -43,6 +43,7 @@
 (defcustom elfeed-tube-mpv-options
   '(;; "--ytdl-format=bestvideo[height<=?480]+bestaudio/best"
     "--cache=yes"
+    "--force-window=yes"
     ;; "--script-opts=osc-scalewindowed=2,osc-visibility=always"
     )
   "List of command line arguments to pass to mpv.
