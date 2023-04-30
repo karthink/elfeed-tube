@@ -788,7 +788,7 @@ The result is a plist with the following keys:
          (result (aio-await (elfeed-tube-curl-enqueue instances-url :method "GET")))
          (status-code (plist-get result :status-code))
          (servers (plist-get result :content)))
-    (when (= status-code 200)
+    (when (equal status-code 200)
       (thread-last
         (json-parse-string servers :object-type 'plist :array-type 'list)
         (cl-remove-if-not (lambda (s) (eq t (plist-get (cadr s) :api))))
@@ -815,7 +815,7 @@ The result is a plist with the following keys:
          (response (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
          (status-code (plist-get response :status-code)))
     (if-let*
-        ((s (= status-code 200))
+        ((s (equal status-code 200))
          (data (with-temp-buffer
                  (save-excursion (insert (plist-get response :content)))
                  (elfeed-tube--extract-captions-urls))))
@@ -857,7 +857,7 @@ The result is a plist with the following keys:
         (let* ((response (aio-await (elfeed-tube-curl-enqueue base-url :method "GET")))
                (captions (plist-get response :content))
                (status-code (plist-get response :status-code)))
-          (if (= status-code 200)
+          (if (equal status-code 200)
               (cons language captions)
             (elfeed-tube-log
              'error
@@ -881,7 +881,7 @@ The result is a plist with the following keys:
                                     api-url :method "GET")))
               (status-code (plist-get response :status-code))
               (content-json (plist-get response :content)))
-    (if (= status-code 200)
+    (if (equal status-code 200)
         (condition-case nil
             (json-parse-string content-json
                            :object-type 'plist
@@ -987,7 +987,7 @@ The result is a plist with the following keys:
                  (api-status (plist-get api-response :status-code))
                  (api-data (plist-get api-response :content))
                  (json-object-type (quote plist)))
-            (if (= api-status 200)
+            (if (equal api-status 200)
                 ;; Return data
                 (condition-case error
                     (prog1

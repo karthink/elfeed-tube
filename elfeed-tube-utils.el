@@ -376,7 +376,7 @@ This function returns a promise."
              (status (plist-get response :status-code))
              (error-msg (plist-get response :error-message)))
         (cond
-         ((= status 200)
+         ((equal status 200)
           (condition-case nil
               (json-parse-string content :object-type 'plist)
             ((json-parse-error error)
