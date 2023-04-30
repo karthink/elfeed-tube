@@ -180,7 +180,7 @@ If set to nil, the indicator is disabled."
                  (string :tag "Any string")))
 
 (defcustom elfeed-tube-auto-save-p nil
-  "Save information fetched by elfeed-tube to the Elfeed databse.
+  "Save information fetched by elfeed-tube to the Elfeed database.
 
 This is a boolean. Fetched information is automatically saved
 when this is set to true."
