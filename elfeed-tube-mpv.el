@@ -170,9 +170,13 @@ This function is intended to be run on a timer when
 `elfeed-tube-mpv-follow-mode' is active."
   (if (not (mpv-live-p))
       (elfeed-tube-mpv--overlay-clear)
-    (when-let ((entry-buf (get-buffer
-                           (elfeed-show--buffer-name
-                            entry-playing))))
+    (when-let ((entry-buf
+                (or (let ((elfeed-show-unique-buffers t))
+                      (get-buffer (elfeed-show--buffer-name
+                                   entry-playing)))
+                    (get-buffer
+                     (elfeed-show--buffer-name
+                      entry-playing)))))
       (when (and (or (derived-mode-p 'elfeed-show-mode)
 		     (window-live-p (get-buffer-window entry-buf)))
 		 (elfeed-tube--same-entry-p
