@@ -87,7 +87,7 @@ You can also move your cursor there and press return (~RET~). The tool-tip provi
 ** Navigable with =imenu=
 Video chapters, when available, are included as headings in the transcript. The entry can be navigated through =imenu=. Here I jump between descriptions of different movies in this video:
 
-#+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/173894489-96b76165-a25d-4667-acd9-40131e80ca8b.mp4"></video></p>
+#+html: <video src="https://user-images.githubusercontent.com/8607532/173894489-96b76165-a25d-4667-acd9-40131e80ca8b.mp4"></video>
 
 ** "Live"
 With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer:
