@@ -87,33 +87,33 @@ You can also move your cursor there and press return (~RET~). The tool-tip provi
 ** Navigable with =imenu=
 Video chapters, when available, are included as headings in the transcript. The entry can be navigated through =imenu=. Here I jump between descriptions of different movies in this video:
 
-#+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/173894489-96b76165-a25d-4667-acd9-40131e80ca8b.mp4"></video></p>
+#+html: <video src="https://user-images.githubusercontent.com/8607532/173894489-96b76165-a25d-4667-acd9-40131e80ca8b.mp4"></video>
 
 ** "Live"
 With MPV integration (optional), you can seek to any time in the video by clicking at the corresponding text in your buffer:
 
-#+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4"></video></p>
+#+html:<video src= "https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4"></video>
 # https://user-images.githubusercontent.com/8607532/172324761-66a1aed8-2d09-48d4-8673-86b5a13ffc4d.mp4
 
 You can jump in Emacs to the current video position with =elfeed-tube-mpv-where= (~C-c C-w~):
 
-#+html:<p align="center"><video src= "https://user-images.githubusercontent.com/8607532/172330220-1948bae0-f7c4-447a-bdeb-2112401ad876.mp4"></video></p>
+#+html:<video src= "https://user-images.githubusercontent.com/8607532/172330220-1948bae0-f7c4-447a-bdeb-2112401ad876.mp4"></video>
 
 Finally, you can also follow along with the video in Emacs:
 
-# #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172347599-8f5fc73c-2229-4292-9815-3b477dce83c2.mp4"></video></p>
+# #+html:<video src="https://user-images.githubusercontent.com/8607532/172347599-8f5fc73c-2229-4292-9815-3b477dce83c2.mp4"></video>
 
-# #+html:<p align="center"><video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video></p>
+# #+html:<video src="https://user-images.githubusercontent.com/8607532/172350452-a73d20ec-333f-4a03-9113-3d7b51154fcc.mp4"></video>
   
-# #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172445445-cd7ed215-3f8a-44b0-b0bf-24d68b2bdfbe.mp4"></video></p>
+# #+html: <video src="https://user-images.githubusercontent.com/8607532/172445445-cd7ed215-3f8a-44b0-b0bf-24d68b2bdfbe.mp4"></video>
 
-#+html: <p alignn="center"><video src="https://user-images.githubusercontent.com/8607532/173082252-cc2ea1f2-e468-47fb-8384-931e7c85966a.mp4"></video></p>
+#+html: <video src="https://user-images.githubusercontent.com/8607532/173082252-cc2ea1f2-e468-47fb-8384-931e7c85966a.mp4"></video>
 
 To do this, turn on =elfeed-tube-mpv-follow-mode= (~C-c C-f~). When this mode is active you can pause video playback with ~SPC~. Clicking on any segment in the transcript will still seek to that point. 
   
 You can combine =elfeed-tube-mpv-follow-mode= with other Emacs buffer modes, like Emacs' =follow-mode= that shows a contiguous buffer in two windows:
 
-#+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172447539-9bbe4a73-eca6-40a1-bf15-0bee8f3b8d94.mp4"></video></p>
+#+html: <video src="https://user-images.githubusercontent.com/8607532/172447539-9bbe4a73-eca6-40a1-bf15-0bee8f3b8d94.mp4"></video>
   
 This feature does not lock up Emacs. You can work in a different window while tracking updates in this one.
 
@@ -134,7 +134,7 @@ Combined with the text manipulation capabilities of Emacs, you can combine these
 
 - Narrow the buffer to just occurrences of a phrase in the transcript, then jump between where they appear. In this example I use =consult-focus-lines= to show only lines mentioning "Ramanujan", then jump through these points in the video by pressing ~RET~. Full-text video search!
   
-  #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172359973-b24e7a91-6384-44a2-b5fc-57d4d2f0e4aa.mp4"></video></p>
+  #+html: <video src="https://user-images.githubusercontent.com/8607532/172359973-b24e7a91-6384-44a2-b5fc-57d4d2f0e4aa.mp4"></video>
   
   This search missed one mention (which was spelled "ramonogen"), but Youtube's auto-generated captions do a surprisingly good job of capturing most common English words. Videos with uploaded captions (most talks/technical videos) don't have this problem.
 
@@ -142,7 +142,7 @@ Combined with the text manipulation capabilities of Emacs, you can combine these
 
 - Youtube video descriptions for technical videos often have useful links or references. Here I use [[https://github.com/oantolin/embark][Embark]] to collect the (non-Youtube, non-sponsor) links and open them in a browser:
   
-  #+html: <p align="center"><video src="https://user-images.githubusercontent.com/8607532/172365106-3896cc4f-3d5f-4cc6-b8d3-0c9df444837e.mp4"></video></p>
+  #+html: <video src="https://user-images.githubusercontent.com/8607532/172365106-3896cc4f-3d5f-4cc6-b8d3-0c9df444837e.mp4"></video>
 
   This works in regular Elfeed too, of course, but for Youtube videos this is much more pleasant than hunting for the tiny "more..." dropdown in the web browser.
 
