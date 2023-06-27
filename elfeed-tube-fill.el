@@ -75,6 +75,9 @@ Optional argument FORCE-UPDATE will force redisplay of the header line."
 (aio-defun elfeed-tube-fill-feeds (entries &optional interactive-p)
   "Fetch and add all channel videos for ENTRIES' feeds.
 
+This feature is currently disabled, pending changes to upstream
+APIs. Sorry about that!
+
 YouTube RSS feeds generally contain only the latest 15 entries.
 Use this command to fetch and add to Elfeed all videos
 corresponding a channel or playlist.
@@ -86,17 +89,19 @@ When called interactively, INTERACTIVE-P is t and a summary
 window will be shown before taking any action."
   (interactive (list (elfeed-tube--ensure-list (elfeed-tube--get-entries))
                      t))
-  (let ((feeds (cl-reduce
-                (lambda (accum entry)
-                  (if-let* ((feed (elfeed-entry-feed entry))
-                            ((memq feed accum)))
-                      accum
-                    (cons feed accum)))
-                entries
-                :initial-value nil)))
-    (if interactive-p
-        (elfeed-tube--fill-display-feeds feeds)
-      (aio-await (elfeed-tube--fill-feeds feeds)))))
+  (message "Back-filling feeds is currently unavailable, sorry!")
+  (unless t
+    (let ((feeds (cl-reduce
+                  (lambda (accum entry)
+                    (if-let* ((feed (elfeed-entry-feed entry))
+                              ((memq feed accum)))
+                        accum
+                      (cons feed accum)))
+                  entries
+                  :initial-value nil)))
+      (if interactive-p
+          (elfeed-tube--fill-display-feeds feeds)
+        (aio-await (elfeed-tube--fill-feeds feeds))))))
 
 (aio-defun elfeed-tube--fill-feeds (feeds)
   "Find videos corresponding to the channels/playlists for Elfeed feeds FEEDS.

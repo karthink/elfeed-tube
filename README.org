@@ -36,7 +36,7 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
 - [[#usage][Usage]]
   - [[#step-i-add-youtube-subscriptions-to-elfeed][Step I: Add Youtube subscriptions to Elfeed]]
   - [[#step-ii-use-elfeed-as-usual][Step II: Use Elfeed as usual]]
-  - [[#optional-back-fill-youtube-feeds][(Optional) Back-fill YouTube feeds]]
+  - [[#optional-back-fill-youtube-feeds][(Optional) +Back-fill YouTube feeds+]]
   - [[#optional-for-live-captions-with-mpv][(Optional) For "Live" captions with MPV]]
   - [[#optional-view-entries-instead-of-auto-saving-them][(Optional) View entries instead of auto-saving them]]
   - [[#optional-fetch-manually][(Optional) Fetch manually]]
@@ -259,7 +259,9 @@ If you're new to Elfeed, you can start with =M-x elfeed=.
 
 In case the fetch for a Youtube entry fails you can call =M-x elfeed-tube-fetch= with a prefix argument (~C-u F~ or ~C-u M-x elfeed-tube-fetch~) to force a refetch.
 
-** (Optional) Back-fill YouTube feeds
+** (Optional) +Back-fill YouTube feeds+
+/Note: This feature is currently unavailable, pending changes to some upstream APIs./
+
 While Elfeed is a vault, Youtube RSS feeds only contain the last 15 videos from a channel. So you will only collect entries for videos from a little before when you subscribe to a channel's feed. 
 
 Elfeed Tube provides a command to add all historical entries for Youtube feeds to Elfeed. Call =elfeed-tube-fill-feeds= in an Elfeed search or entry buffer to fetch all entries for the feed at point. You can do this for many feeds at once by selecting a region of entries.
