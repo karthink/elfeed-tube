@@ -156,7 +156,7 @@ Elfeed Tube is available on MELPA. After [[https://github.com/melpa/melpa#usage]
 MPV integration with the live transcripts is provided separately as =elfeed-tube-mpv=, you can install it with =M-x package-install⮐= =elfeed-tube-mpv=. 
 
 *Requirements*:
-- Emacs 27.1 or newer
+- Emacs 27.1 or newer with JSON support
 - Curl
 
 *Dependencies* (automatically installed):
