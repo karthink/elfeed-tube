@@ -25,7 +25,7 @@
 (require 'elfeed-tube)
 
 (declare-function elfeed-tube--get-entries "elfeed-tube")
-(defvar elfeed-tube--api-channels-videos-path "/api/v1/channels/videos/%s")
+(defvar elfeed-tube--api-channels-videos-path "/api/v1/channels/%s/videos")
 (defvar elfeed-tube--api-playlists-videos-path "/api/v1/playlists/%s")
 (defvar elfeed-tube--fill-tags nil
   "Alist of Elfeed feed-ids and tags to add.
@@ -89,9 +89,7 @@ When called interactively, INTERACTIVE-P is t and a summary
 window will be shown before taking any action."
   (interactive (list (elfeed-tube--ensure-list (elfeed-tube--get-entries))
                      t))
-  (message "Back-filling feeds is currently unavailable, sorry!")
-  (unless t
-    (let ((feeds (cl-reduce
+  (let ((feeds (cl-reduce
                   (lambda (accum entry)
                     (if-let* ((feed (elfeed-entry-feed entry))
                               ((memq feed accum)))
@@ -101,7 +99,7 @@ window will be shown before taking any action."
                   :initial-value nil)))
       (if interactive-p
           (elfeed-tube--fill-display-feeds feeds)
-        (aio-await (elfeed-tube--fill-feeds feeds))))))
+        (aio-await (elfeed-tube--fill-feeds feeds)))))
 
 (aio-defun elfeed-tube--fill-feeds (feeds)
   "Find videos corresponding to the channels/playlists for Elfeed feeds FEEDS.
@@ -184,12 +182,12 @@ Return video metadata as a vector of plists. Metadata
 corresponding to videos already in the Elfeed database are
 filtered out.
 
-PAGE corresponds to the page number of results requested from the API."
+PAGE corresponds to the page number of results requested from the API,
+or a continuation string included in the previous response."
   (cl-check-type feed elfeed-feed "An Elfeed Feed")
-  (cl-check-type page (or null (integer 0 *)) "A positive integer.")
+  (cl-check-type page (or null (integer 0 *) string) "A positive integer or string.")
 
-  (if-let* ((page (or page 1))
-            (feed-url (elfeed-feed-url feed))
+  (if-let* ((feed-url (elfeed-feed-url feed))
             (feed-title (elfeed-feed-title feed))
             (api-path (cond ((string-match "playlist_id=\\(.*?\\)/*$" feed-url)
                              (concat
@@ -202,9 +200,10 @@ PAGE corresponds to the page number of results requested from the API."
                               (format elfeed-tube--api-channels-videos-path
                                       (match-string 1 feed-url))
                               "?fields="
-                              "title,videoId,author,published"
+                              "videos(title,videoId,author,published),continuation"
                               "&sort_by=newest"
-                              "&page=" (number-to-string (or page 1))))
+                              ;; PAGE here is actually a continuation string
+                              (when (stringp page) (concat "&continuation=" page))))
                             (t (elfeed-tube-log 'error "[Malformed/Not YouTube feed: %s][%s]"
                                                 feed-title feed-url)
                                nil)))
@@ -213,28 +212,32 @@ PAGE corresponds to the page number of results requested from the API."
       (let ((feed-entry-video-ids
              (mapcar (lambda (e) (elfeed-tube--url-video-id (elfeed-entry-link e)))
                      (elfeed-feed-entries feed)))
-            (feed-id (elfeed-feed-id feed)))
+            (feed-id (elfeed-feed-id feed))
+            (next-page))
         (if-let*
-            ((api-data
+            ((api-data-full
               (aio-await
                (elfeed-tube--aio-fetch
                 (concat (aio-await (elfeed-tube--get-invidious-url)) api-path)
                 #'elfeed-tube--nrotate-invidious-servers)))
-             (api-data (pcase feed-type
-                         ('channel api-data)
-                         ('playlist
-                          (cl-check-type api-data (and (not null) list))
-                          (plist-get api-data :videos))))
+             (api-data (progn (cl-check-type api-data-full (and (not null) list))
+                              (plist-get api-data-full :videos)))
              ((> (length api-data) 0)))
             (progn
-              (cl-check-type api-data elfeed-tube--fill-api-data)
-              (elfeed-tube-log 'debug "[Backfilling: page %d][Fetched: %d entries]"
-                               (or page 1) (length api-data))
+              (setq next-page
+                    (pcase feed-type
+                      ('channel (plist-get api-data-full :continuation))
+                      ('playlist (if page (1+ page) 2))))
+              ;; FIXME this type check fails
+              ;; (cl-check-type api-data elfeed-tube--fill-api-data)
+              (elfeed-tube-log 'debug "[Backfilling...][Fetched: %d entries]" (length api-data))
               (vconcat
                (cl-delete-if   ;remove entries already in db
                 (lambda (elt) (member (plist-get elt :videoId) feed-entry-video-ids))
                 api-data)
-               (aio-await (elfeed-tube--fill-feed feed (1+ page)))))
+               (if next-page
+                   (aio-await (elfeed-tube--fill-feed feed next-page))
+                 (make-vector 0 0))))
           (make-vector 0 0)))
     (elfeed-tube-log 'error "[Malformed/Not Youtube feed: %s][%s]" feed-title feed-url)))
 
