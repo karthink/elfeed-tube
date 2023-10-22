@@ -118,7 +118,7 @@ queries."
                            api-url #'elfeed-tube--nrotate-invidious-servers))))
         
        ((string-match
-         (concat elfeed-tube-youtube-regexp "c/" "\\([^?&]+\\)") q)
+         (concat elfeed-tube-youtube-regexp "\\(?:@\\|c/\\)" "\\([^?&]+\\)") q)
         ;; Interpret channel url as search query
         (let* ((search-url "/api/v1/search")
                (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
