@@ -422,6 +422,8 @@ is a plist of video metadata."
                 url)
   (if-let ((video-id (match-string 1 url)))
       (progn
+        ;; Ensure Elfeed is set up to show Youtube data
+        (elfeed-tube-setup)
         (message "Creating a video summary...")
         (cl-letf* ((elfeed-show-unique-buffers t)
                    (elfeed-show-entry-switch #'display-buffer)
