@@ -17,6 +17,8 @@
 (require 'rx)
 (require 'aio)
 (require 'elfeed)
+(eval-when-compile
+  (require 'cl-lib))
 
 (declare-function elfeed-tube--with-label "elfeed-tube")
 (declare-function elfeed-tube--fetch-1 "elfeed-tube")
@@ -465,7 +467,12 @@ is a plist of video metadata."
 
 (defsubst elfeed-tube--line-at-point ()
   "Get line around point."
-  (buffer-substring (line-beginning-position) (line-end-position)))
+  (concat
+   (cl-loop for f in (ensure-list (get-char-property (point) 'face))
+            for n = (symbol-name f)
+            thereis (and (string-match "^shr-h.$" n)
+                         (make-string (- (aref n 5) 49) ? )))
+   (buffer-substring (line-beginning-position) (line-end-position))))
 
 (defun elfeed-tube-next-heading (&optional arg)
   "Jump to the next heading in an Elfeed entry.
