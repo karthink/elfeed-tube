@@ -75,9 +75,6 @@ Optional argument FORCE-UPDATE will force redisplay of the header line."
 (aio-defun elfeed-tube-fill-feeds (entries &optional interactive-p)
   "Fetch and add all channel videos for ENTRIES' feeds.
 
-This feature is currently disabled, pending changes to upstream
-APIs. Sorry about that!
-
 YouTube RSS feeds generally contain only the latest 15 entries.
 Use this command to fetch and add to Elfeed all videos
 corresponding a channel or playlist.
