@@ -4,6 +4,8 @@
 [[https://melpa.org/#/elfeed-tube][file:https://melpa.org/packages/elfeed-tube-badge.svg]]
 :END:
 
+*NOTE:* Due to Invidious API changes, Elfeed Tube is currently unable to obtain video thumbnails or descriptions. See [[https://github.com/karthink/elfeed-tube/issues/35][issue #35]] for further details and discussion on alternative approaches.
+
 Elfeed Tube is an Emacs package for a richer, interactive, noise-free and fully text-capable interface to your Youtube subscriptions and playlists using Elfeed, the RSS feed reader for Emacs. Think of it as supercharging Elfeed, or perhaps a taste of what the RSS/Atom protocol /could have become today/ if it had continue to evolve.
 
 Elfeed Tube adds video descriptions, metadata and "live" transcripts (see below) for all Youtube video entries in Elfeed. Here is what a video entry looks like:
