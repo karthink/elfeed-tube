@@ -196,6 +196,13 @@ entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
+(defcustom elfeed-tube-use-ytdlp-p t
+  "Whether to use yt-dlp to obtain description, thumbnail, duration.
+
+This is a boolean. Use yt-dlp when t. Otherwise use invidious."
+  :group 'elfeed-tube
+  :type 'boolean)
+
 (defcustom elfeed-tube-captions-sblock-p t
   "Whether sponsored segments should be de-emphasized in transcripts."
   :group 'elfeed-tube
