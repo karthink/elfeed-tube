@@ -1002,7 +1002,7 @@ The result is a plist with the following keys:
        (gethash "chapters" videodata)
        ))))
 
-(aio-defun elfeed-tube--fetch-desc (entry &optional attempts)
+(aio-defun elfeed-tube--fetch-desc-invid (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
          (video-id (elfeed-tube--entry-video-id entry)))
     (when (> attempts 0)
