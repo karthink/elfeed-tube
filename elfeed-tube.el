@@ -972,6 +972,11 @@ The result is a plist with the following keys:
                   (setf (car telm) cat))
              finally return captions)))
 
+(defun elfeed-tube--fetch-desc (entry &optional attempts)
+  (if elfeed-tube-use-ytdlp-p
+      (elfeed-tube--fetch-desc-ytdlp entry attempts)
+    (elfeed-tube--fetch-desc-invid entry attempts)))
+
 (aio-defun elfeed-tube--fetch-desc (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
          (video-id (elfeed-tube--entry-video-id entry)))
