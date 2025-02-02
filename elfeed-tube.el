@@ -979,28 +979,32 @@ The result is a plist with the following keys:
 
 (aio-defun elfeed-tube--fetch-desc-ytdlp (entry &optional attempts)
   "Returns a list containing description, duration, and thumbnail url for video at URL"
-  (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
-         (video-id (elfeed-tube--entry-video-id entry))
-         (json-file (make-temp-file "elfeed-tube-")))
-    (with-temp-file json-file
-      (insert (shell-command-to-string
-               (concat
-                "yt-dlp --skip-download --dump-json " video-id))))
-    (let* ((json-object-type 'hash-table)
-           (json-array-type 'list)
-           (json-key-type 'string)
-           (videodata (json-read-file json-file)))
-      (delete-file json-file)
-      (list
-       :length
-       (gethash "duration" videodata) ; duration
-       :thumb
-       (gethash "thumbnail" videodata) ; thumbnail url possibly too large. Need to get appropriate size.
-       :desc
-       (gethash "description" videodata) ; description - plain test. Need to get html.
-       :chaps
-       (gethash "chapters" videodata)
-       ))))
+  (if (executable-find "yt-dlp")
+      (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
+             (video-id (elfeed-tube--entry-video-id entry))
+             (json-file (make-temp-file "elfeed-tube-")))
+        (with-temp-file json-file
+          (insert (shell-command-to-string
+                   (concat
+                    "yt-dlp --skip-download --dump-json " video-id))))
+        (let* ((json-object-type 'hash-table)
+               (json-array-type 'list)
+               (json-key-type 'string)
+               (videodata (json-read-file json-file)))
+          (delete-file json-file)
+          (list
+           :length
+           (gethash "duration" videodata) ; duration
+           :thumb
+           (gethash "thumbnail" videodata) ; thumbnail url possibly too large. Need to get appropriate size.
+           :desc
+           (gethash "description" videodata) ; description - plain test. Need to get html.
+           :chaps
+           (gethash "chapters" videodata)
+           )))
+    (message
+     "Could not find yt-dlp executable. Please install yt-dlp or add to path.")
+    ))
 
 (aio-defun elfeed-tube--fetch-desc-invid (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
