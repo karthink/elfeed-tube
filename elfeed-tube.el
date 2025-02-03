@@ -236,6 +236,9 @@ paragraphs or sections. It must be a positive integer."
   (mapconcat #'file-name-as-directory
              `(,elfeed-db-directory "elfeed-tube" "comments")
              ""))
+(defvar elfeed-tube--ytdlp-thumb-sizes
+  '(large 1080 medium 480 small 360)
+  "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp thumbnail image heights")
 
 (defun elfeed-tube-captions-browse-with (follow-fun)
   "Return a command to browse thing at point with FOLLOW-FUN."
@@ -470,6 +473,18 @@ into alist format consumed by the rest of elfeed-tube"
                                  chapter-data))) ;list of chapter start times
     (seq-mapn #'(lambda (a b) (cons a b)) chapter-starts chapter-titles)) ;alist of (start . title)
   )
+
+(defun elfeed-tube--get-thumb-ytdlp (thumb-data)
+  "Takes list of hashtables of video thumbnails obtained from yt-dlp json dump
+and returns the url for the thumbnail of required size"
+  (let* ((urls nil))
+    (alist-get (plist-get
+                elfeed-tube--ytdlp-thumb-sizes
+                elfeed-tube-thumbnail-size)
+               (dolist (table thumb-data urls)
+                 (if (gethash "height" table)
+                     (push (cons (gethash "height" table) (gethash "url" table)) urls))))
+  ))
 
 (defun elfeed-tube--extract-captions-urls ()
   "Extract captionn URLs from Youtube HTML."
@@ -1007,7 +1022,8 @@ The result is a plist with the following keys:
            :length
            (gethash "duration" videodata) ; duration
            :thumb
-           (gethash "thumbnail" videodata) ; thumbnail url possibly too large. Need to get appropriate size.
+           (elfeed-tube--get-thumb-ytdlp (gethash "thumbnails" videodata)) ;appropriately sized testing
+           ;;(gethash "thumbnail" videodata) ;single size large guaranteed to work
            :desc
            (gethash "description" videodata) ; description - plain test. Need to get html.
            :chaps
