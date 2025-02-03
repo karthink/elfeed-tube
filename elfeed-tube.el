@@ -461,6 +461,16 @@ paragraphs or sections. It must be a positive integer."
     `(:length ,length-seconds :thumb ,thumb :desc ,desc-html
       :chaps ,chapters)))
 
+(defun elfeed-tube--get-chapters-ytdlp (chapter-data)
+  "Convert list of hashtables of chapter information obtained from yt-dlp json dump
+into alist format consumed by the rest of elfeed-tube"
+  (let* ((chapter-titles (mapcar #'(lambda (table) (gethash "title" table))
+                                 chapter-data)) ;list of chapter titles
+         (chapter-starts (mapcar #'(lambda (table) (gethash "start_time" table))
+                                 chapter-data))) ;list of chapter start times
+    (seq-mapn #'(lambda (a b) (cons a b)) chapter-starts chapter-titles)) ;alist of (start . title)
+  )
+
 (defun elfeed-tube--extract-captions-urls ()
   "Extract captionn URLs from Youtube HTML."
   (catch 'parse-error
@@ -1001,7 +1011,7 @@ The result is a plist with the following keys:
            :desc
            (gethash "description" videodata) ; description - plain test. Need to get html.
            :chaps
-           (gethash "chapters" videodata)
+           (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))
            )))
     (message
      "Could not find yt-dlp executable. Please install yt-dlp or add to path.")
