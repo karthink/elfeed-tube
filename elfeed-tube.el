@@ -196,7 +196,8 @@ entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
-(defcustom elfeed-tube-use-ytdlp-p t
+(defcustom elfeed-tube-use-ytdlp-p
+  (if (executable-find "yt-dlp") t nil)
   "Whether to use yt-dlp to obtain description, thumbnail, duration.
 
 This is a boolean. Use yt-dlp when t. Otherwise use invidious."
