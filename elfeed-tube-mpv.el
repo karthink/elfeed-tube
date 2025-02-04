@@ -157,7 +157,7 @@ session."
               (elfeed-tube-mpv--set-timer entry)))
         (apply #'start-process
                (concat "elfeed-tube-mpv-"
-                       (elfeed-tube--entry-video-id elfeed-show-entry))
+                       (elfeed-tube--entry-video-id entry))
                nil "mpv" args)
         (message (concat "Starting new mpv instance: "
                          (propertize "Not connected to Elfeed ❌"
