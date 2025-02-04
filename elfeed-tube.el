@@ -1004,15 +1004,16 @@ The result is a plist with the following keys:
     (elfeed-tube--fetch-desc-invid entry attempts)))
 
 (aio-defun elfeed-tube--fetch-desc-ytdlp (entry &optional attempts)
-  "Returns a list containing description, duration, and thumbnail url for video at URL"
+  "Returns hash tables containing description, duration, and thumbnail url for video at URL"
   (if (executable-find "yt-dlp")
       (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
              (video-id (elfeed-tube--entry-video-id entry))
+             (url (format "https://youtube.com/watch?v=%s" video-id))
              (json-file (make-temp-file "elfeed-tube-")))
         (with-temp-file json-file
           (insert (shell-command-to-string
                    (concat
-                    "yt-dlp --skip-download --dump-json " video-id))))
+                    "yt-dlp --skip-download --dump-json " url))))
         (let* ((json-object-type 'hash-table)
                (json-array-type 'list)
                (json-key-type 'string)
