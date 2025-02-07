@@ -1018,15 +1018,22 @@ The result is a plist with the following keys:
              (video-id (elfeed-tube--entry-video-id entry))
              (url (format "https://youtube.com/watch?v=%s" video-id))
              (json-file (make-temp-file "elfeed-tube-")))
-        (with-temp-file json-file
-          (insert (shell-command-to-string
-                   (concat
-                    "yt-dlp --skip-download --dump-json " url))))
+        (aio-await
+         (aio-call-process "yt-dlp"
+                           (get-buffer-create url)
+                           "--skip-download" "--dump-json" url))
+        ;; (with-temp-file json-file
+        ;;   (insert (shell-command-to-string
+        ;;            (concat
+        ;;             "yt-dlp --skip-download --dump-json " url))))
         (let* ((json-object-type 'hash-table)
                (json-array-type 'list)
                (json-key-type 'string)
-               (videodata (json-read-file json-file)))
-          (delete-file json-file)
+               (videodata (with-current-buffer url
+                                        (goto-char (point-min))
+                                        (json-read))))
+          ;; (delete-file json-file)
+          (kill-buffer url)
           (list
            :length
            (gethash "duration" videodata) ; duration
