@@ -1022,17 +1022,12 @@ The result is a plist with the following keys:
          (aio-call-process "yt-dlp"
                            (get-buffer-create url)
                            "--skip-download" "--dump-json" url))
-        ;; (with-temp-file json-file
-        ;;   (insert (shell-command-to-string
-        ;;            (concat
-        ;;             "yt-dlp --skip-download --dump-json " url))))
         (let* ((json-object-type 'hash-table)
                (json-array-type 'list)
                (json-key-type 'string)
                (videodata (with-current-buffer url
                                         (goto-char (point-min))
                                         (json-read))))
-          ;; (delete-file json-file)
           (kill-buffer url)
           (list
            :length
