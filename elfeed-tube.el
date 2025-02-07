@@ -998,6 +998,14 @@ The result is a plist with the following keys:
                   (setf (car telm) cat))
              finally return captions)))
 
+;; https://github.com/skeeto/emacs-aio/issues/19#issuecomment-729660484
+(defun aio-call-process (program buffer &rest args)
+  (let ((process (apply #'start-process program buffer program args))
+        (promise (aio-promise)))
+    (prog1 promise
+      (setf (process-sentinel process)
+            (lambda (_ status) (aio-resolve promise (lambda () status)))))))
+
 (defun elfeed-tube--fetch-desc (entry &optional attempts)
   (if elfeed-tube-use-ytdlp-p
       (elfeed-tube--fetch-desc-ytdlp entry attempts)
