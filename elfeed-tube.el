@@ -237,7 +237,8 @@ paragraphs or sections. It must be a positive integer."
              `(,elfeed-db-directory "elfeed-tube" "comments")
              ""))
 (defvar elfeed-tube--ytdlp-thumb-sizes
-  '(large 1080 medium 480 small 360)
+  ;;  '(large 1080 medium 480 small 360)
+    '(large 480 medium 360 small 188)
   "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp thumbnail image heights")
 
 (defun elfeed-tube-captions-browse-with (follow-fun)
