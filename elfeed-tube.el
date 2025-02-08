@@ -464,6 +464,18 @@ paragraphs or sections. It must be a positive integer."
     `(:length ,length-seconds :thumb ,thumb :desc ,desc-html
       :chaps ,chapters)))
 
+(defun elfeed-tube--ytdlp-htmldesc (desc)
+  "Takes text of description and adds html tags for improved rendering in elfeed"
+  (with-temp-buffer
+    (insert desc)
+    (goto-char (point-min))
+    (insert "<p>\n")
+    (goto-char (point-min))
+    (while (re-search-forward "\n\n+" nil t) (replace-match "</p>\n\n<p>" t t))
+    (goto-char (point-max))
+    (insert "\n</p>")
+    (buffer-string)))
+
 (defun elfeed-tube--get-chapters-ytdlp (chapter-data)
   "Convert list of hashtables of chapter information obtained from yt-dlp json dump
 into alist format consumed by the rest of elfeed-tube"
@@ -1036,7 +1048,7 @@ The result is a plist with the following keys:
            (elfeed-tube--get-thumb-ytdlp (gethash "thumbnails" videodata)) ;appropriately sized testing
            ;;(gethash "thumbnail" videodata) ;single size large guaranteed to work
            :desc
-           (gethash "description" videodata) ; description - plain test. Need to get html.
+           (elfeed-tube--ytdlp-htmldesc (gethash "description" videodata)) ; description
            :chaps
            (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))
            )))
