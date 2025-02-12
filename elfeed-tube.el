@@ -1041,9 +1041,9 @@ The result is a plist with the following keys:
         (let* ((json-object-type 'hash-table)
                (json-array-type 'list)
                (json-key-type 'string)
-               (videodata (unless (ignore-errors (with-current-buffer url
+               (videodata (ignore-errors (with-current-buffer url
                                         (goto-char (point-min))
-                                                   (json-read))))))
+                                           (json-read)))))
           (if videodata (progn
           (kill-buffer url)
           (list
