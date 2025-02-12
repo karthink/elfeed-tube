@@ -1045,12 +1045,11 @@ The result is a plist with the following keys:
           (kill-buffer url)
           (list
            :length
-           (gethash "duration" videodata) ; duration
+                           (gethash "duration" videodata)
            :thumb
-           (elfeed-tube--get-thumb-ytdlp (gethash "thumbnails" videodata)) ;appropriately sized testing
-           ;;(gethash "thumbnail" videodata) ;single size large guaranteed to work
+                           (elfeed-tube--get-thumb-ytdlp (gethash "thumbnails" videodata))
            :desc
-           (elfeed-tube--ytdlp-htmldesc (gethash "description" videodata)) ; description
+                           (elfeed-tube--ytdlp-htmldesc (gethash "description" videodata))
            :chaps
                            (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))))
             (progn (elfeed-tube-log 'error
