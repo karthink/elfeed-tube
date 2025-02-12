@@ -1038,9 +1038,10 @@ The result is a plist with the following keys:
         (let* ((json-object-type 'hash-table)
                (json-array-type 'list)
                (json-key-type 'string)
-               (videodata (with-current-buffer url
+               (videodata (unless (ignore-errors (with-current-buffer url
                                         (goto-char (point-min))
-                                        (json-read))))
+                                                   (json-read))))))
+          (if videodata (progn
           (kill-buffer url)
           (list
            :length
@@ -1051,8 +1052,13 @@ The result is a plist with the following keys:
            :desc
            (elfeed-tube--ytdlp-htmldesc (gethash "description" videodata)) ; description
            :chaps
-           (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))
-           )))
+                           (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))))
+            (progn (elfeed-tube-log 'error
+                                    "[Description][video:%s]: %s"
+                                    (elfeed-tube--truncate (elfeed-entry-title entry))
+                                    (with-current-buffer url (buffer-string)))
+                   (message "Error fetching video data. See log.")
+                   (kill-buffer url)))))
     (message
      "Could not find yt-dlp executable. Please install yt-dlp or add to path.")
     ))
