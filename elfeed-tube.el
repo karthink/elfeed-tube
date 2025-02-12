@@ -1011,6 +1011,7 @@ The result is a plist with the following keys:
                   (setf (car telm) cat))
              finally return captions)))
 
+;; Utilize aio package for calling external processes
 ;; https://github.com/skeeto/emacs-aio/issues/19#issuecomment-729660484
 (defun aio-call-process (program buffer &rest args)
   (let ((process (apply #'start-process program buffer program args))
@@ -1019,11 +1020,13 @@ The result is a plist with the following keys:
       (setf (process-sentinel process)
             (lambda (_ status) (aio-resolve promise (lambda () status)))))))
 
+;; Wrapper function to maintain compatibility with original architecture
 (defun elfeed-tube--fetch-desc (entry &optional attempts)
   (if elfeed-tube-use-ytdlp-p
       (elfeed-tube--fetch-desc-ytdlp entry attempts)
     (elfeed-tube--fetch-desc-invid entry attempts)))
 
+;; Main yt-dlp call and response handling
 (aio-defun elfeed-tube--fetch-desc-ytdlp (entry &optional attempts)
   "Returns hash tables containing description, duration, and thumbnail url for video at URL"
   (if (executable-find "yt-dlp")
