@@ -474,8 +474,10 @@ paragraphs or sections. It must be a positive integer."
 into alist format consumed by the rest of elfeed-tube"
   (let* ((chapter-titles (mapcar #'(lambda (table) (gethash "title" table))
                                  chapter-data)) ;list of chapter titles
-         (chapter-starts (mapcar #'(lambda (table) (gethash "start_time" table))
-                                 chapter-data))) ;list of chapter start times
+         (chapter-starts (mapcar #'number-to-string
+                                 (mapcar #'floor
+                                         (mapcar #'(lambda (table) (gethash "start_time" table))
+                                 chapter-data))))) ;list of chapter start times
     (seq-mapn #'(lambda (a b) (cons a b)) chapter-starts chapter-titles)) ;alist of (start . title)
   )
 
