@@ -467,17 +467,7 @@ paragraphs or sections. It must be a positive integer."
 
 (defun elfeed-tube--ytdlp-htmldesc (desc)
   "Takes text of description and adds html tags for improved rendering in elfeed"
-  (with-temp-buffer
-    (insert desc)
-    (goto-char (point-min))
-    (insert "<p>\n")
-    (goto-char (point-min))
-    (while (re-search-forward "\n\n+" nil t) (replace-match "</p><p>" t t))
-    (goto-char (point-min))
-    (while (re-search-forward "\n" nil t) (replace-match "<br>" t t))
-    (goto-char (point-max))
-    (insert "\n</p>")
-    (buffer-string)))
+  (replace-regexp-in-string "\n" "<br>" desc))
 
 (defun elfeed-tube--get-chapters-ytdlp (chapter-data)
   "Convert list of hashtables of chapter information obtained from yt-dlp json dump
