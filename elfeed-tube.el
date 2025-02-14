@@ -239,7 +239,8 @@ paragraphs or sections. It must be a positive integer."
 (defvar elfeed-tube--ytdlp-thumb-sizes
   ;;  '(large 1080 medium 480 small 360)
     '(large 480 medium 360 small 188)
-  "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp thumbnail image heights")
+    "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp
+thumbnail image heights")
 
 (defun elfeed-tube-captions-browse-with (follow-fun)
   "Return a command to browse thing at point with FOLLOW-FUN."
@@ -1022,7 +1023,8 @@ The result is a plist with the following keys:
 
 ;; Main yt-dlp call and response handling
 (aio-defun elfeed-tube--fetch-desc-ytdlp (entry &optional attempts)
-  "Returns hash tables containing description, duration, and thumbnail url for video at URL"
+  "Returns hash tables containing description, duration, and thumbnail
+ url for video at URL"
   (if (executable-find "yt-dlp")
       (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
              (video-id (elfeed-tube--entry-video-id entry))
