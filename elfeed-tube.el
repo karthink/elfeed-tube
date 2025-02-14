@@ -1041,15 +1041,15 @@ The result is a plist with the following keys:
                                         (goto-char (point-min))
                                            (json-read)))))
           (if videodata (progn
-          (kill-buffer url)
-          (list
-           :length
+                          (kill-buffer url)
+                          (list
+                           :length
                            (gethash "duration" videodata)
-           :thumb
+                           :thumb
                            (elfeed-tube--get-thumb-ytdlp (gethash "thumbnails" videodata))
-           :desc
+                           :desc
                            (elfeed-tube--ytdlp-htmldesc (gethash "description" videodata))
-           :chaps
+                           :chaps
                            (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))))
             (progn (elfeed-tube-log 'error
                                     "[Description][video:%s]: %s"
