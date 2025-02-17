@@ -1028,8 +1028,7 @@ The result is a plist with the following keys:
   (if (executable-find "yt-dlp")
       (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
              (video-id (elfeed-tube--entry-video-id entry))
-             (url (format "https://youtube.com/watch?v=%s" video-id))
-             (json-file (make-temp-file "elfeed-tube-")))
+             (url (format "https://youtube.com/watch?v=%s" video-id)))
         (aio-await
          (aio-call-process "yt-dlp"
                            (get-buffer-create url)
