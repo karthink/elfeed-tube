@@ -1009,43 +1009,21 @@ The result is a plist with the following keys:
 (aio-defun elfeed-tube--ytdlp-fetch-desc (entry &optional _attempts)
   "Return a plist containing description, duration, thumbnail
  url and chapter data for elfeed ENTRY."
-  (if (executable-find "yt-dlp")
-      (let* ((video-id (elfeed-tube--entry-video-id entry))
-             (url (format "https://youtube.com/watch?v=%s" video-id))
-             (yt-proc
-              (start-process
-               "yt-dlp" (get-buffer-create url)
-               "yt-dlp" "--quiet" "--skip-download" "--dump-json" url))
-             (promise (aio-promise)))
-        (set-process-query-on-exit-flag yt-proc nil)
-        (set-process-sentinel
-         yt-proc (lambda (_ status) (aio-resolve promise (lambda () status))))
-        (aio-await promise)
-        (let ((videodata
-               (ignore-errors
-                 (with-current-buffer url
-                   (goto-char (point-min))
-                   (when (re-search-forward "^{" nil t)
-                     (forward-line 0)
-                     (json-parse-buffer :array-type 'list))))))
-          (if videodata
-              (progn
-                (kill-buffer url)
-                (list :length (gethash "duration" videodata)
-                      :thumb (elfeed-tube--ytdlp-get-thumb
-                              (gethash "thumbnails" videodata))
-                      :desc (replace-regexp-in-string
-                             "\n" "<br>" (gethash "description" videodata))
-                      :chaps (elfeed-tube--ytdlp-get-chapters
-                              (gethash "chapters" videodata))))
-            (elfeed-tube-log 'error
-                             "[Description][video:%s]: %s"
-                             (elfeed-tube--truncate (elfeed-entry-title entry))
-                             (with-current-buffer url (buffer-string)))
-            (message "Error fetching video data. See log.")
-            (kill-buffer url))))
-    (message
-     "Could not find yt-dlp executable. Please install yt-dlp or add to path.")))
+  (let* ((video-id (elfeed-tube--entry-video-id entry))
+         (videodata (aio-await (elfeed-tube--ytdlp-fetch video-id))))
+    (if videodata
+        (list :length (gethash "duration" videodata)
+              :thumb (elfeed-tube--ytdlp-get-thumb
+                      (gethash "thumbnails" videodata))
+              :desc (replace-regexp-in-string
+                     "\n" "<br>" (gethash "description" videodata))
+              :chaps (elfeed-tube--ytdlp-get-chapters
+                      (gethash "chapters" videodata)))
+      (elfeed-tube-log 'error
+                       "[Description][video:%s]: %s"
+                       (elfeed-tube--truncate (elfeed-entry-title entry))
+                       "Could not fetch video data using yt-dlp")
+      (message "Error fetching video data. See log."))))
 
 (aio-defun elfeed-tube--invidious-fetch-desc (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))

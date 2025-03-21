@@ -32,6 +32,10 @@
 (defvar elfeed-tube-youtube-regexp)
 (defvar elfeed-tube--api-videos-path)
 (defvar elfeed-tube--max-retries)
+(defvar elfeed-tube-use-ytdlp-p)
+
+(defvar elfeed-tube--ytdlp-table (make-hash-table :test #'equal)
+  "Hash table for storing yt-dlp output.")
 
 (defsubst elfeed-tube--ensure-list (var)
   "Ensure VAR is a list."
@@ -393,6 +397,33 @@ This function returns a promise."
             (aio-await
              (elfeed-tube--aio-fetch url next desc (1- attempts)))))))))
 
+(aio-defun elfeed-tube--ytdlp-fetch (url)
+  "Return a hash table of the JSON dump as retrieved by yt-dlp.
+
+URL is the video id or url.  The data is cached in a global hash
+table."
+  (unless (executable-find "yt-dlp")
+    (user-error
+     "Could not find yt-dlp executable. Please install yt-dlp or add to path."))
+  (or (gethash url elfeed-tube--ytdlp-table)
+      (let* ((yt-proc
+              (start-process
+               "yt-dlp" (get-buffer-create url)
+               "yt-dlp" "--quiet" "--skip-download" "--dump-json" url))
+             (promise (aio-promise)))
+        (set-process-query-on-exit-flag yt-proc nil)
+        (set-process-sentinel
+         yt-proc (lambda (_ status) (aio-resolve promise (lambda () status))))
+        (aio-await promise)
+        (prog1 (ignore-errors
+                 (with-current-buffer url
+                   (goto-char (point-min))
+                   (when (re-search-forward "^{" nil t)
+                     (forward-line 0)
+                     (puthash url (json-parse-buffer :array-type 'list)
+                              elfeed-tube--ytdlp-table))))
+          (kill-buffer url)))))
+
 (defun elfeed-tube--entry-create (feed-id entry-data)
   "Create an Elfeed entry from ENTRY-DATA for feed with id FEED-ID.
 
@@ -431,20 +462,28 @@ is a plist of video metadata."
                    (elfeed-show-entry-switch #'display-buffer)
                    (elfeed-tube-save-indicator nil)
                    (elfeed-tube-auto-save-p nil)
-                   (api-data (aio-await
-                              (elfeed-tube--aio-fetch
-                               (concat (aio-await (elfeed-tube--get-invidious-url))
-                                       elfeed-tube--api-videos-path
-                                       video-id
-                                       "?fields="
-                                       ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
-                                       "title,author,authorUrl,published,videoId")
-                               #'elfeed-tube--nrotate-invidious-servers)))
+                   (api-data
+                    (if elfeed-tube-use-ytdlp-p
+                        (when-let* ((videodata (aio-await
+                                                (elfeed-tube--ytdlp-fetch video-id))))
+                          (list :authorUrl (gethash "channel_id" videodata)
+                                :author    (gethash "uploader" videodata)
+                                :title     (gethash "title" videodata)
+                                :published (gethash "timestamp" videodata)
+                                :videoId   (gethash "id" videodata)))
+                      (aio-await
+                       (elfeed-tube--aio-fetch
+                        (concat (aio-await (elfeed-tube--get-invidious-url))
+                                elfeed-tube--api-videos-path
+                                video-id
+                                "?fields="
+                                ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
+                                "title,author,authorUrl,published,videoId")
+                        #'elfeed-tube--nrotate-invidious-servers))))
                    (feed-id (concat "https://www.youtube.com/feeds/videos.xml?channel_id="
                                     (nth 1 (split-string (plist-get api-data :authorUrl)
                                                          "/" t))))
-                   (author `((:name ,(plist-get api-data :author)
-                                    :uri ,feed-id)))
+                   (author `((:name ,(plist-get api-data :author) :uri ,feed-id)))
                    (entry (elfeed-tube--entry-create feed-id api-data))
                    ((symbol-function 'elfeed-entry-feed)
                     (lambda (_)
