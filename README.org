@@ -4,7 +4,7 @@
 [[https://melpa.org/#/elfeed-tube][file:https://melpa.org/packages/elfeed-tube-badge.svg]]
 :END:
 
-*NOTE:* Due to Invidious API changes, Elfeed Tube is currently unable to obtain video thumbnails or descriptions. See [[https://github.com/karthink/elfeed-tube/issues/35][issue #35]] for further details and discussion on alternative approaches.
+*NOTE:* Due to Invidious API changes, Elfeed Tube is currently unable to obtain video thumbnails or descriptions. See [[https://github.com/karthink/elfeed-tube/issues/35][issue #35]] for further details and discussion on alternative approaches. There is now an experimental =yt-dlp= based fetch method provided as an alternative. See [[#fetch-method][this section]] of this README for details.
 
 Elfeed Tube is an Emacs package for a richer, interactive, noise-free and fully text-capable interface to your Youtube subscriptions and playlists using Elfeed, the RSS feed reader for Emacs. Think of it as supercharging Elfeed, or perhaps a taste of what the RSS/Atom protocol /could have become today/ if it had continue to evolve.
 
@@ -45,6 +45,7 @@ Elfeed Tube is useful for any Youtube RSS feed, but it works particularly well f
   - [[#optional-elfeed-tube-for-any-video][(Optional) Elfeed Tube for any video]]
   - [[#commands-summary][Commands summary]]
 - [[#customization][Customization]]
+  - [[#fetch-method][Fetch method]]
   - [[#disabling-fields][Disabling fields]]
   - [[#customizing-fields][Customizing fields]]
   - [[#persistence][Persistence]]
@@ -331,6 +332,9 @@ You can call =elfeed-tube-fetch= outside of Elfeed to read an abritrary Youtube 
 
 * Customization
 Elfeed Tube has opinionated defaults but is fully configurable through the Customize interface (=M-x customize=). Here are some examples:
+
+** Fetch method
+Due to changes in the availability of Invidious API services, Elfeed Tube provides a (currently experimental) feature to leverage =yt-dlp= from the user's system for download of duration, description, thumbnail and chapter video information. If =yt-dlp= is found on the emacs =exec-path= at Elfeed Tube startup, the =yt-dlp= fetch method will be used by default. This can be changed by customizing =elfeed-tube-use-ytdlp-p=.
 
 ** Disabling fields
 Customize =elfeed-tube-fields=. To show only the duration and captions but no description, thumbnail or chapter locations:
