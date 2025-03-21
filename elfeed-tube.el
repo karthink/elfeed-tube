@@ -1021,15 +1021,13 @@ The result is a plist with the following keys:
         (set-process-sentinel
          yt-proc (lambda (_ status) (aio-resolve promise (lambda () status))))
         (aio-await promise)
-        (let* ((json-object-type 'hash-table)
-               (json-array-type 'list)
-               (json-key-type 'string)
-               (videodata (ignore-errors
-                            (with-current-buffer url
-                              (goto-char (point-min))
-                              (when (re-search-forward "^{" nil t)
-                                (forward-line 0)
-                                (json-read))))))
+        (let ((videodata
+               (ignore-errors
+                 (with-current-buffer url
+                   (goto-char (point-min))
+                   (when (re-search-forward "^{" nil t)
+                     (forward-line 0)
+                     (json-parse-buffer :array-type 'list))))))
           (if videodata
               (progn
                 (kill-buffer url)
@@ -1040,12 +1038,12 @@ The result is a plist with the following keys:
                              "\n" "<br>" (gethash "description" videodata))
                       :chaps (elfeed-tube--ytdlp-get-chapters
                               (gethash "chapters" videodata))))
-            (progn (elfeed-tube-log 'error
-                                    "[Description][video:%s]: %s"
-                                    (elfeed-tube--truncate (elfeed-entry-title entry))
-                                    (with-current-buffer url (buffer-string)))
-                   (message "Error fetching video data. See log.")
-                   (kill-buffer url)))))
+            (elfeed-tube-log 'error
+                             "[Description][video:%s]: %s"
+                             (elfeed-tube--truncate (elfeed-entry-title entry))
+                             (with-current-buffer url (buffer-string)))
+            (message "Error fetching video data. See log.")
+            (kill-buffer url))))
     (message
      "Could not find yt-dlp executable. Please install yt-dlp or add to path.")))
 
