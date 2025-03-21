@@ -196,8 +196,7 @@ entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
-(defcustom elfeed-tube-use-ytdlp-p
-  (if (executable-find "yt-dlp") t nil)
+(defcustom elfeed-tube-use-ytdlp-p (and (executable-find "yt-dlp") t)
   "Whether to use yt-dlp to obtain description, thumbnail, duration.
 
 This is a boolean. Use yt-dlp when t. Otherwise use invidious."
@@ -236,8 +235,7 @@ paragraphs or sections. It must be a positive integer."
   (mapconcat #'file-name-as-directory
              `(,elfeed-db-directory "elfeed-tube" "comments")
              ""))
-(defvar elfeed-tube--ytdlp-thumb-sizes
-  ;;  '(large 1080 medium 480 small 360)
+(defconst elfeed-tube--ytdlp-thumb-sizes
     '(large 480 medium 360 small 188)
     "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp
 thumbnail image heights")
@@ -466,33 +464,27 @@ thumbnail image heights")
     `(:length ,length-seconds :thumb ,thumb :desc ,desc-html
       :chaps ,chapters)))
 
-(defun elfeed-tube--ytdlp-htmldesc (desc)
-  "Takes text of description and adds html tags for improved rendering in elfeed"
-  (replace-regexp-in-string "\n" "<br>" desc))
+(defun elfeed-tube--ytdlp-get-chapters (chapter-data)
+  "Convert list of hashtables of chapter information obtained from
+yt-dlp JSON dump into alist format consumed by the rest of
+elfeed-tube."
+  (cl-loop for chapter in chapter-data
+           for title = (gethash "title" chapter)
+           for start = (number-to-string (floor (gethash "start_time" chapter)))
+           collect (cons start title)))
 
-(defun elfeed-tube--get-chapters-ytdlp (chapter-data)
-  "Convert list of hashtables of chapter information obtained from yt-dlp json dump
-into alist format consumed by the rest of elfeed-tube"
-  (let* ((chapter-titles (mapcar #'(lambda (table) (gethash "title" table))
-                                 chapter-data)) ;list of chapter titles
-         (chapter-starts (mapcar #'number-to-string
-                                 (mapcar #'floor
-                                         (mapcar #'(lambda (table) (gethash "start_time" table))
-                                 chapter-data))))) ;list of chapter start times
-    (seq-mapn #'(lambda (a b) (cons a b)) chapter-starts chapter-titles)) ;alist of (start . title)
-  )
-
-(defun elfeed-tube--get-thumb-ytdlp (thumb-data)
-  "Takes list of hashtables of video thumbnails obtained from yt-dlp json dump
-and returns the url for the thumbnail of required size"
+(defun elfeed-tube--ytdlp-get-thumb (thumb-data)
+  "Take list of hashtables of video thumbnails obtained from yt-dlp
+json dump and return the url for the thumbnail of required size."
   (let* ((urls nil))
-    (alist-get (plist-get
-                elfeed-tube--ytdlp-thumb-sizes
-                elfeed-tube-thumbnail-size)
-               (dolist (table thumb-data urls)
-                 (if (gethash "height" table)
-                     (push (cons (gethash "height" table) (gethash "url" table)) urls))))
-  ))
+    (alist-get
+     (plist-get
+      elfeed-tube--ytdlp-thumb-sizes
+      elfeed-tube-thumbnail-size)
+     (dolist (table thumb-data urls)
+       (if (gethash "height" table)
+           (push (cons (gethash "height" table) (gethash "url" table))
+                 urls))))))
 
 (defun elfeed-tube--extract-captions-urls ()
   "Extract captionn URLs from Youtube HTML."
@@ -1006,50 +998,48 @@ The result is a plist with the following keys:
                   (setf (car telm) cat))
              finally return captions)))
 
-;; Utilize aio package for calling external processes
-;; https://github.com/skeeto/emacs-aio/issues/19#issuecomment-729660484
-(defun aio-call-process (program buffer &rest args)
-  (let ((process (apply #'start-process program buffer program args))
-        (promise (aio-promise)))
-    (prog1 promise
-      (setf (process-sentinel process)
-            (lambda (_ status) (aio-resolve promise (lambda () status)))))))
-
 ;; Wrapper function to maintain compatibility with original architecture
 (defun elfeed-tube--fetch-desc (entry &optional attempts)
+  "Fetch metadata for ENTRY, try ATTEMPTS times."
   (if elfeed-tube-use-ytdlp-p
-      (elfeed-tube--fetch-desc-ytdlp entry attempts)
-    (elfeed-tube--fetch-desc-invid entry attempts)))
+      (elfeed-tube--ytdlp-fetch-desc entry attempts)
+    (elfeed-tube--invidious-fetch-desc entry attempts)))
 
 ;; Main yt-dlp call and response handling
-(aio-defun elfeed-tube--fetch-desc-ytdlp (entry &optional attempts)
-  "Returns hash tables containing description, duration, and thumbnail
- url for video at URL"
+(aio-defun elfeed-tube--ytdlp-fetch-desc (entry &optional _attempts)
+  "Return a plist containing description, duration, thumbnail
+ url and chapter data for elfeed ENTRY."
   (if (executable-find "yt-dlp")
-      (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
-             (video-id (elfeed-tube--entry-video-id entry))
-             (url (format "https://youtube.com/watch?v=%s" video-id)))
-        (aio-await
-         (aio-call-process "yt-dlp"
-                           (get-buffer-create url)
-                           "--skip-download" "--dump-json" url))
+      (let* ((video-id (elfeed-tube--entry-video-id entry))
+             (url (format "https://youtube.com/watch?v=%s" video-id))
+             (yt-proc
+              (start-process
+               "yt-dlp" (get-buffer-create url)
+               "yt-dlp" "--quiet" "--skip-download" "--dump-json" url))
+             (promise (aio-promise)))
+        (set-process-query-on-exit-flag yt-proc nil)
+        (set-process-sentinel
+         yt-proc (lambda (_ status) (aio-resolve promise (lambda () status))))
+        (aio-await promise)
         (let* ((json-object-type 'hash-table)
                (json-array-type 'list)
                (json-key-type 'string)
-               (videodata (ignore-errors (with-current-buffer url
-                                        (goto-char (point-min))
-                                           (json-read)))))
-          (if videodata (progn
-                          (kill-buffer url)
-                          (list
-                           :length
-                           (gethash "duration" videodata)
-                           :thumb
-                           (elfeed-tube--get-thumb-ytdlp (gethash "thumbnails" videodata))
-                           :desc
-                           (elfeed-tube--ytdlp-htmldesc (gethash "description" videodata))
-                           :chaps
-                           (elfeed-tube--get-chapters-ytdlp (gethash "chapters" videodata))))
+               (videodata (ignore-errors
+                            (with-current-buffer url
+                              (goto-char (point-min))
+                              (when (re-search-forward "^{" nil t)
+                                (forward-line 0)
+                                (json-read))))))
+          (if videodata
+              (progn
+                (kill-buffer url)
+                (list :length (gethash "duration" videodata)
+                      :thumb (elfeed-tube--ytdlp-get-thumb
+                              (gethash "thumbnails" videodata))
+                      :desc (replace-regexp-in-string
+                             "\n" "<br>" (gethash "description" videodata))
+                      :chaps (elfeed-tube--ytdlp-get-chapters
+                              (gethash "chapters" videodata))))
             (progn (elfeed-tube-log 'error
                                     "[Description][video:%s]: %s"
                                     (elfeed-tube--truncate (elfeed-entry-title entry))
@@ -1057,10 +1047,9 @@ The result is a plist with the following keys:
                    (message "Error fetching video data. See log.")
                    (kill-buffer url)))))
     (message
-     "Could not find yt-dlp executable. Please install yt-dlp or add to path.")
-    ))
+     "Could not find yt-dlp executable. Please install yt-dlp or add to path.")))
 
-(aio-defun elfeed-tube--fetch-desc-invid (entry &optional attempts)
+(aio-defun elfeed-tube--invidious-fetch-desc (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
          (video-id (elfeed-tube--entry-video-id entry)))
     (when (> attempts 0)
