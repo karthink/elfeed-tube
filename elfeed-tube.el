@@ -102,10 +102,10 @@ Other symbols are ignored.
 To set the thumbnail size, see `elfeed-tube-thumbnail-size'.
 To set caption language(s), see `elfeed-tube-captions-languages'."
   :group 'elfeed-tube
-  :type '(repeat (choice (const duration :tag "Duration")
-                         (const thumbnail :tag "Thumbnail")
-                         (const description :tag "Description")
-                         (const captions :tag "Transcript")))) ;TODO
+  :type '(repeat (choice (const :tag "Duration" duration)
+                         (const :tag "Thumbnail" thumbnail)
+                         (const :tag "Description" description)
+                         (const :tag "Transcript" captions)))) ;TODO
 
 (defcustom elfeed-tube-thumbnail-size 'small
   "Video thumbnail size to show in the Elfeed buffer.
@@ -292,12 +292,6 @@ thumbnail image heights")
   (string-match-p elfeed-tube-youtube-regexp
                   (elfeed-entry-link entry)))
 
-(defsubst elfeed-tube--entry-video-id (entry)
-  "Get Youtube video ENTRY's video-id."
-  (when-let* (((elfeed-tube--youtube-p entry))
-              (link (elfeed-entry-link entry)))
-    (elfeed-tube--url-video-id link)))
-
 (defsubst elfeed-tube--url-video-id (url)
   "Get YouTube video URL's video-id."
   (and (string-match
@@ -308,10 +302,16 @@ thumbnail image heights")
          url)
     (match-string 1 url)))
 
+(defsubst elfeed-tube--entry-video-id (entry)
+  "Get Youtube video ENTRY's video-id."
+  (when-let* (((elfeed-tube--youtube-p entry))
+              (link (elfeed-entry-link entry)))
+    (elfeed-tube--url-video-id link)))
+
 (defsubst elfeed-tube--random-elt (collection)
   "Random element from COLLECTION."
   (and collection
-      (elt collection (cl-random (length collection)))))
+       (elt collection (cl-random (length collection)))))
 
 (defsubst elfeed-tube-log (level fmt &rest objects)
   "Log OBJECTS with FMT at LEVEL using `elfeed-log'."
@@ -615,7 +615,7 @@ buffer."
                                               (elfeed-meta entry :caps))))
                                   (condition-case nil
                                       (read capstr)
-                                    ('error
+                                    (error
                                      (elfeed-tube-log
                                       'error "[Show][Captions] DB parse error: %S"
                                       (elfeed-meta entry :caps)))))))))
