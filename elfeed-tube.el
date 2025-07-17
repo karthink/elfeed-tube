@@ -73,6 +73,7 @@
   (require 'cl-lib))
 (require 'subr-x)
 (require 'rx)
+(require 'map)
 (require 'aio)
 
 (require 'elfeed-tube-utils)
@@ -842,6 +843,14 @@ The result is a plist with the following keys:
         (nconc (cdr elfeed-tube--invidious-servers)
                (list (car elfeed-tube--invidious-servers)))))
 
+(defconst elfeed-tube-captions--innertube-context
+  '((client
+     (clientName . "ANDROID")
+     (clientVersion . "20.10.38"))))
+
+(defconst elfeed-tube-captions--innertube-api-url
+  "https://www.youtube.com/youtubei/v1/player")
+
 (aio-defun elfeed-tube--fetch-captions-tracks (entry)
   (let* ((video-id (elfeed-tube--entry-video-id entry))
          (url (format "https://youtube.com/watch?v=%s" video-id))
@@ -849,12 +858,29 @@ The result is a plist with the following keys:
          (status-code (plist-get response :status-code)))
     (if-let*
         ((s (equal status-code 200))
-         (data (with-temp-buffer
-                 (save-excursion (insert (plist-get response :content)))
-                 (elfeed-tube--extract-captions-urls))))
-      ;; (message "%S" data)
+         (video-html (plist-get response :content))
+         (innertube-api-key
+          (and (string-match
+                "\"INNERTUBE_API_KEY\":\"\\([a-zA-Z0-9_-]+\\)" video-html)
+               (match-string 1 video-html)))
+         (innertube-data
+          (aio-await
+           (elfeed-tube-curl-enqueue
+            (format "%s?key=%s"
+                    elfeed-tube-captions--innertube-api-url
+                    innertube-api-key)
+            :method "POST"
+            :headers '(("Content-Type" . "application/json")
+                       ("Accept-Language" . "en-US"))
+            :data (json-encode
+                   `((context . ,elfeed-tube-captions--innertube-context)
+                     (videoId . ,video-id))))))
+         ((= (plist-get innertube-data :status-code) 200)))
         (thread-first
-          data
+          innertube-data
+          (plist-get :content)
+          (json-parse-string :object-type 'plist)
+          (plist-get :captions)
           (plist-get :playerCaptionsTracklistRenderer)
           (plist-get :captionTracks))
       (elfeed-tube-log 'debug "[%s][Caption tracks]: %s"
@@ -884,9 +910,12 @@ The result is a plist with the following keys:
        "[Captions][video:%s][Not available in %s]"
        (elfeed-tube--truncate (elfeed-entry-title entry))
        (string-join elfeed-tube-captions-languages ", ")))
-     (t (setq base-url (plist-get chosen-caption :baseUrl)
-              language (thread-first (plist-get chosen-caption :name)
-                                     (plist-get :simpleText)))
+     (t (setq base-url (replace-regexp-in-string
+                        "&fmt=srv3" "" (plist-get chosen-caption :baseUrl))
+              language (or (map-nested-elt chosen-caption '(:name :runs 0 :text))
+                           ;; Legacy: may not work any more
+                           (thread-first (plist-get chosen-caption :name)
+                                         (plist-get :simpleText))))
         (let* ((response (aio-await (elfeed-tube-curl-enqueue base-url :method "GET")))
                (captions (plist-get response :content))
                (status-code (plist-get response :status-code)))
