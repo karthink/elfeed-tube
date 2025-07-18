@@ -515,7 +515,7 @@ paragraphs or sections. It must be a positive integer."
     (replace-regexp-in-string
      (rx (one-or-more (or space punct))
          (group (syntax close-parenthesis)))
-     )
+     "\\1")))
 
 ;; Content display
 (defvar elfeed-tube--save-state-map
