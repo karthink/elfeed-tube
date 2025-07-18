@@ -90,11 +90,11 @@ json dump and return the url for the thumbnail of required size."
            return (plist-get thumb-plist :url)))
 
 ;; Main yt-dlp call and response handling
-(aio-defun elfeed-tube--ytdlp-fetch-desc (entry &optional _attempts)
+(aio-defun elfeed-tube--ytdlp-fetch-desc (entry &optional existing _attempts)
   "Return a plist containing description, duration, thumbnail
  url and chapter data for elfeed ENTRY."
   (let* ((video-id (elfeed-tube--entry-video-id entry))
-         (videodata (aio-await (elfeed-tube--ytdlp-fetch video-id)))
+         (videodata (or existing (aio-await (elfeed-tube--ytdlp-fetch video-id))))
          caps)
     (if videodata
         (progn

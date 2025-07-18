@@ -1020,66 +1020,71 @@ The result is a plist with the following keys:
 (declare-function elfeed-tube--ytdlp-fetch-desc "elfeed-tube-ytdlp")
 
 ;; Wrapper function to maintain compatibility with original architecture
-(defun elfeed-tube--fetch-desc (entry &optional attempts)
+(defun elfeed-tube--fetch-desc (entry &optional existing attempts)
   "Fetch metadata for ENTRY, try ATTEMPTS times."
   (when (eq elfeed-tube-backend 'yt-dlp) (require 'elfeed-tube-ytdlp))
   (pcase-exhaustive elfeed-tube-backend
-    ('youtube (elfeed-tube--youtube-fetch-desc entry attempts))
-    ('yt-dlp (elfeed-tube--ytdlp-fetch-desc entry attempts))))
+    ('youtube (elfeed-tube--youtube-fetch-desc entry existing attempts))
+    ('yt-dlp (elfeed-tube--ytdlp-fetch-desc entry existing attempts))))
 
-(aio-defun elfeed-tube--youtube-fetch-desc (entry &optional attempts)
-  (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
-         (video-id (elfeed-tube--entry-video-id entry)))
+(aio-defun elfeed-tube--youtube-fetch-innertube (video-id)
+  (let* ((url (format "https://youtube.com/watch?v=%s" video-id))
+         (response (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
+         (status-code (plist-get response :status-code)))
+    (if-let* (((equal status-code 200))
+              (video-html (plist-get response :content))
+              (innertube-api-key
+               (and (string-match
+                     "\"INNERTUBE_API_KEY\":\"\\([a-zA-Z0-9_-]+\\)" video-html)
+                    (match-string 1 video-html)))
+              (innertube-response
+               (aio-await
+                (elfeed-tube-curl-enqueue
+                 (format "%s?key=%s"
+                         elfeed-tube--innertube-api-url
+                         innertube-api-key)
+                 :method "POST"
+                 :headers '(("Content-Type" . "application/json")
+                            ("Accept-Language" . "en-US"))
+                 :data (json-encode
+                        `((context . ,elfeed-tube--innertube-context)
+                          (videoId . ,video-id))))))
+              ((= (plist-get innertube-response :status-code) 200)))
+        (condition-case nil
+            (json-parse-string (plist-get innertube-response :content)
+                               :object-type 'plist)
+          (json-parse-error
+           (prog1 nil
+             (elfeed-tube-log
+              'error "[Description][video:%s]: JSON malformed" video-id))))
+      (prog1 nil
+        (elfeed-tube-log 'debug "[%s][Description]: %s"
+                         url (plist-get response :error-message))
+        (elfeed-tube-log 'warn "[Description][video:%s]: Not available" video-id)))))
+
+(aio-defun elfeed-tube--youtube-fetch-desc (entry &optional existing attempts)
+  (let ((attempts (or attempts (1+ elfeed-tube--max-retries)))
+        (video-id (elfeed-tube--entry-video-id entry)))
     (when (> attempts 0)
-      (let* ((url (format "https://youtube.com/watch?v=%s" video-id))
-             (response (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
-             (status-code (plist-get response :status-code)))
-        (if-let* (((equal status-code 200))
-                  (video-html (plist-get response :content))
-                  (innertube-api-key
-                   (and (string-match
-                         "\"INNERTUBE_API_KEY\":\"\\([a-zA-Z0-9_-]+\\)" video-html)
-                        (match-string 1 video-html)))
-                  (innertube-response
-                   (aio-await
-                    (elfeed-tube-curl-enqueue
-                     (format "%s?key=%s"
-                             elfeed-tube--innertube-api-url
-                             innertube-api-key)
-                     :method "POST"
-                     :headers '(("Content-Type" . "application/json")
-                                ("Accept-Language" . "en-US"))
-                     :data (json-encode
-                            `((context . ,elfeed-tube--innertube-context)
-                              (videoId . ,video-id))))))
-                  ((= (plist-get innertube-response :status-code) 200)))
-            (condition-case nil
-                (let ((content
-                       (json-parse-string (plist-get innertube-response :content)
-                                          :object-type 'plist))
-                      caps)
-                  ;; Captions
-                  (when (elfeed-tube-include-p 'captions)
-                    (if-let* ((caption-tracks
-                               (map-nested-elt content '(:captions
-                                                         :playerCaptionsTracklistRenderer
-                                                         :captionTracks))))
-                        (setq caps (aio-await (elfeed-tube--youtube-fetch-captions
-                                               caption-tracks entry)))
-                      (elfeed-tube-log 'warn "[Captions][video:%s]: Not available"
-                                       (elfeed-tube--truncate (elfeed-entry-title entry)))))
-                  ;; Rest
-                  (nconc (elfeed-tube--youtube-parse-desc content)
-                         (and caps (list :caps caps))))
-              (json-parse-error
-               (elfeed-tube-log
-                'error "[Description][video:%s]: JSON malformed"
-                (elfeed-tube--truncate (elfeed-entry-title entry)))))
-          (elfeed-tube-log 'debug "[%s][Description]: %s"
-                           url (plist-get response :error-message))
-          (elfeed-tube-log 'warn "[Description][video:%s]: Not available"
-                           (elfeed-tube--truncate (elfeed-entry-title entry)))
-          (aio-await (elfeed-tube--fetch-desc entry (- attempts 1))))))))
+      (let ((caps))
+        (if-let* ((api-data
+                   (or existing
+                       (aio-await (elfeed-tube--youtube-fetch-innertube video-id)))))
+            (progn
+              ;; Captions
+              (when (elfeed-tube-include-p 'captions)
+                (if-let* ((caption-tracks
+                           (map-nested-elt api-data '(:captions
+                                                      :playerCaptionsTracklistRenderer
+                                                      :captionTracks))))
+                    (setq caps (aio-await (elfeed-tube--youtube-fetch-captions
+                                           caption-tracks entry)))
+                  (elfeed-tube-log 'warn "[Captions][video:%s]: Not available"
+                                   (elfeed-tube--truncate (elfeed-entry-title entry)))))
+              ;; Rest
+              (nconc (elfeed-tube--youtube-parse-desc api-data)
+                     (and caps (list :caps caps))))
+          (aio-await (elfeed-tube--youtube-fetch-desc entry nil (- attempts 1))))))))
 
 (aio-defun elfeed-tube--invidious-fetch-desc (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
@@ -1136,7 +1141,7 @@ The result is a plist with the following keys:
 (aio-defun elfeed-tube--with-label (label func &rest args)
   (cons label (aio-await (apply func args))))
 
-(aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
+(aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch existing)
   (when (elfeed-tube--youtube-p entry)
    (let* ((cached (elfeed-tube--gethash entry))
           desc thumb duration caps sblock chaps error)
@@ -1162,19 +1167,19 @@ The result is a plist with the following keys:
                   (elfeed-meta entry :duration)
                   (elfeed-meta entry :caps)))))
       
-     (if-let* ((data (aio-await (elfeed-tube--fetch-desc entry))))
-         (progn
-           (when (elfeed-tube-include-p 'thumbnail)
-            (setf thumb (plist-get data :thumb)))
-           (when (elfeed-tube-include-p 'description)
-            (setf desc (plist-get data :desc)))
-           (when (elfeed-tube-include-p 'duration)
-            (setf duration (plist-get data :length)))
-           (when (elfeed-tube-include-p 'chapters)
-            (setf chaps (plist-get data :chaps)))
-           (when (elfeed-tube-include-p 'captions)
-            (setf caps (plist-get data :caps))))
-       (setq error (append error '(desc duration thumb caps)))))
+      (if-let* ((data (aio-await (elfeed-tube--fetch-desc entry existing))))
+          (progn
+            (when (elfeed-tube-include-p 'thumbnail)
+              (setf thumb (plist-get data :thumb)))
+            (when (elfeed-tube-include-p 'description)
+              (setf desc (plist-get data :desc)))
+            (when (elfeed-tube-include-p 'duration)
+              (setf duration (plist-get data :length)))
+            (when (elfeed-tube-include-p 'chapters)
+              (setf chaps (plist-get data :chaps)))
+            (when (elfeed-tube-include-p 'captions)
+              (setf caps (plist-get data :caps))))
+        (setq error (append error '(desc duration thumb caps)))))
       
     ;; Add (optional) sblock and chapter info to caps
     (when caps
