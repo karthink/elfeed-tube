@@ -421,6 +421,11 @@ is a plist of video metadata."
      :meta `(:authors ,author)
      :feed-id feed-id)))
 
+(declare-function elfeed-tube-setup "elfeed-tube")
+(declare-function elfeed-tube--youtube-fetch-innertube "elfeed-tube")
+(declare-function elfeed-tube--ytdlp-fetch "elfeed-tube-ytdlp")
+(defvar elfeed-tube-backend)
+
 (aio-defun elfeed-tube--fake-entry (url &optional force-fetch)
   (string-match (concat elfeed-tube-youtube-regexp
                         (rx (zero-or-one "watch?v=")
@@ -435,26 +440,45 @@ is a plist of video metadata."
                    (elfeed-show-entry-switch #'display-buffer)
                    (elfeed-tube-save-indicator nil)
                    (elfeed-tube-auto-save-p nil)
+                   (api-data-full nil)
                    (api-data
-                    (if elfeed-tube-use-ytdlp-p
-                        (progn
-                          (require 'elfeed-tube-ytdlp)
-                          (when-let* ((videodata (aio-await
-                                                  (elfeed-tube--ytdlp-fetch video-id))))
-                            (list :authorUrl (plist-get videodata :channel_id)
-                                  :author    (plist-get videodata :uploader)
-                                  :title     (plist-get videodata :title)
-                                  :published (plist-get videodata :timestamp)
-                                  :videoId   (plist-get videodata :id))))
-                      (aio-await
-                       (elfeed-tube--aio-fetch
-                        (concat (aio-await (elfeed-tube--get-invidious-url))
-                                elfeed-tube--api-videos-path
-                                video-id
-                                "?fields="
-                                ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
-                                "title,author,authorUrl,published,videoId")
-                        #'elfeed-tube--nrotate-invidious-servers))))
+                    (pcase elfeed-tube-backend
+                      ('youtube
+                       (setq api-data-full (aio-await
+                                            (elfeed-tube--youtube-fetch-innertube
+                                             video-id)))
+                       (when-let* ((details (plist-get api-data-full :videoDetails)))
+                         (list :authorUrl (plist-get details :channelId)
+                               :author    (plist-get details :author)
+                               :title     (plist-get details :title)
+                               :videoId   (plist-get details :videoId)
+                               :published (string-to-number
+                                           (map-nested-elt
+                                            api-data-full
+                                            '(:frameworkUpdates
+                                              :entityBatchUpdate
+                                              :timestamp
+                                              :seconds))))))
+                      ('yt-dlp
+                       (require 'elfeed-tube-ytdlp)
+                       (setq api-data-full (aio-await
+                                            (elfeed-tube--ytdlp-fetch video-id)))
+                       (when api-data-full
+                         (list :authorUrl (plist-get api-data-full :channel_id)
+                               :author    (plist-get api-data-full :uploader)
+                               :title     (plist-get api-data-full :title)
+                               :published (plist-get api-data-full :timestamp)
+                               :videoId   (plist-get api-data-full :id))))
+                      ('invidious
+                       (aio-await
+                        (elfeed-tube--aio-fetch
+                         (concat (aio-await (elfeed-tube--get-invidious-url))
+                                 elfeed-tube--api-videos-path
+                                 video-id
+                                 "?fields="
+                                 ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
+                                 "title,author,authorUrl,published,videoId")
+                         #'elfeed-tube--nrotate-invidious-servers)))))
                    (feed-id (concat "https://www.youtube.com/feeds/videos.xml?channel_id="
                                     (nth 1 (split-string (plist-get api-data :authorUrl)
                                                          "/" t))))
@@ -467,7 +491,7 @@ is a plist of video metadata."
                        :url feed-id
                        :title (plist-get api-data :author)
                        :author author))))
-          (aio-await (elfeed-tube--fetch-1 entry force-fetch))
+          (aio-await (elfeed-tube--fetch-1 entry force-fetch api-data-full))
           (with-selected-window (elfeed-show-entry entry)
             (message "Summary created for video: \"%s\""
                      (elfeed-entry-title entry))
