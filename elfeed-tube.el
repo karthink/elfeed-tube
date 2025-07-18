@@ -499,6 +499,7 @@ buffer."
                       finally return (nconc result (list (list pstart time para)))))
             (inhibit-read-only t))
         (goto-char (point-max))
+        (unless (eq (char-before) 10) (insert "\n"))
         (insert "\n"
                 (propertize "Transcript:" 'face 'message-header-name)
                 "\n\n")
@@ -729,7 +730,7 @@ This does the following:
                           (string-to-number length-seconds)
                         length-seconds)
               :thumb thumb
-              :desc desc
+              :desc (replace-regexp-in-string "\n" "<br>" desc)
               :chaps chapters)))))
 
 (aio-defun elfeed-tube--youtube-fetch-captions-url (caption-plist entry)
