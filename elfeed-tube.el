@@ -197,12 +197,26 @@ entries that don't have metadata."
   :group 'elfeed-tube
   :type 'boolean)
 
-(defcustom elfeed-tube-use-ytdlp-p (and (executable-find "yt-dlp") t)
+(defcustom elfeed-tube-backend 'youtube
+  "Backend for fetching video metadata from YouTube.
+
+This is a symbol, with recognized values
+
+- youtube: Fetch data from YouTube directly (the default),
+- yt-dlp: Fetch data using yt-dlp (which must be on the path)
+- invidious: Fetch data using Invidious (currently non-operational)."
+  :group 'elfeed-tube
+  :type '(choice
+          (const :tag "YouTube" youtube)
+          (const :tag "yt-dlp"  yt-dlp)
+          (const :tag "Invidious" invidious)))
+
+(defvar elfeed-tube-use-ytdlp-p (and (executable-find "yt-dlp") t)
   "Whether to use yt-dlp to obtain description, thumbnail, duration.
 
-This is a boolean. Use yt-dlp when t. Otherwise use invidious."
-  :group 'elfeed-tube
-  :type 'boolean)
+This is a boolean. Use yt-dlp when t. Otherwise use invidious.")
+(make-obsolete-variable
+ 'elfeed-tube-use-ytdlp-p 'elfeed-tube-backend "0.16")
 
 (defcustom elfeed-tube-captions-sblock-p t
   "Whether sponsored segments should be de-emphasized in transcripts."
@@ -236,10 +250,14 @@ paragraphs or sections. It must be a positive integer."
   (mapconcat #'file-name-as-directory
              `(,elfeed-db-directory "elfeed-tube" "comments")
              ""))
-(defconst elfeed-tube--ytdlp-thumb-sizes
-    '(large 480 medium 360 small 188)
-    "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp
-thumbnail image heights")
+
+(defconst elfeed-tube--innertube-context
+  '((client
+     (clientName . "ANDROID")
+     (clientVersion . "20.10.38"))))
+
+(defconst elfeed-tube--innertube-api-url
+  "https://www.youtube.com/youtubei/v1/player")
 
 (defun elfeed-tube-captions-browse-with (follow-fun)
   "Return a command to browse thing at point with FOLLOW-FUN."
@@ -297,7 +315,7 @@ thumbnail image heights")
   (and (string-match
          (concat
           elfeed-tube-youtube-regexp
-          "\\(?:watch\\?v=\\)?"
+          "\\(?:watch\\?v=\\|shorts/\\)?"
           "\\([^?&]+\\)")
          url)
     (match-string 1 url)))
@@ -442,6 +460,26 @@ thumbnail image heights")
               chapters))
       (nreverse chapters))))
 
+(defun elfeed-tube--youtube-parse-desc (api-data)
+  "Parse API-DATA for video description and captions."
+  (when-let* ((details (plist-get api-data :videoDetails)))
+    (let* ((desc (plist-get details :shortDescription))
+           (chapters (elfeed-tube--get-chapters desc))
+           (length-seconds (plist-get details :lengthSeconds))
+           (thumb-alist '((large  . 3) (medium . 2) (small  . 1)))
+           (thumb-idx (cdr-safe (assoc elfeed-tube-thumbnail-size
+                                       thumb-alist)))
+           thumb)
+      (when (and (elfeed-tube-include-p 'thumbnail) thumb-idx)
+        (setq thumb (map-nested-elt
+                     details `(:thumbnail :thumbnails ,thumb-idx :url)))
+        (list :length (if (stringp length-seconds)
+                          (string-to-number length-seconds)
+                        length-seconds)
+              :thumb thumb
+              :desc desc
+              :chaps chapters)))))
+
 (defun elfeed-tube--parse-desc (api-data)
   "Parse API-DATA for video description."
   (let* ((length-seconds (plist-get api-data :lengthSeconds))
@@ -462,49 +500,7 @@ thumbnail image heights")
                     (plist-get api-data :videoThumbnails)
                     (aref thumb-size)
                     (plist-get :url))))
-    `(:length ,length-seconds :thumb ,thumb :desc ,desc-html
-      :chaps ,chapters)))
-
-(defun elfeed-tube--ytdlp-get-chapters (chapter-data)
-  "Convert list of hashtables of chapter information obtained from
-yt-dlp JSON dump into alist format consumed by the rest of
-elfeed-tube."
-  (cl-loop for chapter in chapter-data
-           for title = (gethash "title" chapter)
-           for start = (number-to-string (floor (gethash "start_time" chapter)))
-           collect (cons start title)))
-
-(defun elfeed-tube--ytdlp-get-thumb (thumb-data)
-  "Take list of hashtables of video thumbnails obtained from yt-dlp
-json dump and return the url for the thumbnail of required size."
-  (let* ((urls nil))
-    (alist-get
-     (plist-get
-      elfeed-tube--ytdlp-thumb-sizes
-      elfeed-tube-thumbnail-size)
-     (dolist (table thumb-data urls)
-       (if (gethash "height" table)
-           (push (cons (gethash "height" table) (gethash "url" table))
-                 urls))))))
-
-(defun elfeed-tube--extract-captions-urls ()
-  "Extract captionn URLs from Youtube HTML."
-  (catch 'parse-error
-    (if (not (search-forward "\"captions\":" nil t))
-        (throw 'parse-error "captions section not found")
-      (delete-region (point-min) (point))
-      (if (not (search-forward ",\"videoDetails" nil t))
-          (throw 'parse-error "video details not found")
-        (goto-char (match-beginning 0))
-        (delete-region (point) (point-max))
-        (goto-char (point-min))
-        (save-excursion
-          (while (search-forward "\n" nil t)
-            (delete-region (match-beginning 0) (match-end 0))))
-        (condition-case nil
-            (json-parse-buffer :object-type 'plist
-                               :array-type 'list)
-          (json-parse-error (throw 'parse-error "json-parse-error")))))))
+    (list :length length-seconds :thumb thumb :desc desc-html :chaps chapters)))
 
 (defun elfeed-tube--postprocess-captions (text)
   "Tweak TEXT for display in the transcript."
@@ -519,7 +515,7 @@ json dump and return the url for the thumbnail of required size."
     (replace-regexp-in-string
      (rx (one-or-more (or space punct))
          (group (syntax close-parenthesis)))
-     "\\1")))
+     )
 
 ;; Content display
 (defvar elfeed-tube--save-state-map
@@ -843,14 +839,6 @@ The result is a plist with the following keys:
         (nconc (cdr elfeed-tube--invidious-servers)
                (list (car elfeed-tube--invidious-servers)))))
 
-(defconst elfeed-tube-captions--innertube-context
-  '((client
-     (clientName . "ANDROID")
-     (clientVersion . "20.10.38"))))
-
-(defconst elfeed-tube-captions--innertube-api-url
-  "https://www.youtube.com/youtubei/v1/player")
-
 (aio-defun elfeed-tube--fetch-captions-tracks (entry)
   (let* ((video-id (elfeed-tube--entry-video-id entry))
          (url (format "https://youtube.com/watch?v=%s" video-id))
@@ -867,13 +855,13 @@ The result is a plist with the following keys:
           (aio-await
            (elfeed-tube-curl-enqueue
             (format "%s?key=%s"
-                    elfeed-tube-captions--innertube-api-url
+                    elfeed-tube--innertube-api-url
                     innertube-api-key)
             :method "POST"
             :headers '(("Content-Type" . "application/json")
                        ("Accept-Language" . "en-US"))
             :data (json-encode
-                   `((context . ,elfeed-tube-captions--innertube-context)
+                   `((context . ,elfeed-tube--innertube-context)
                      (videoId . ,video-id))))))
          ((= (plist-get innertube-data :status-code) 200)))
         (thread-first
@@ -888,7 +876,7 @@ The result is a plist with the following keys:
       (elfeed-tube-log 'warn "[Captions][video:%s]: Not available"
                        (elfeed-tube--truncate (elfeed-entry-title entry))))))
 
-(aio-defun elfeed-tube--fetch-captions-url (caption-plist entry)
+(aio-defun elfeed-tube--youtube-fetch-captions-url (caption-plist entry)
   (let* ((case-fold-search t)
          (chosen-caption
           (cl-loop
@@ -959,14 +947,12 @@ The result is a plist with the following keys:
        (elfeed-tube--truncate (elfeed-entry-title entry))
        (plist-get response :error-message)))))
 
-(aio-defun elfeed-tube--fetch-captions (entry)
-  (pcase-let* ((urls (aio-await (elfeed-tube--fetch-captions-tracks entry)))
-               (`(,language . ,xmlcaps) (aio-await (elfeed-tube--fetch-captions-url urls entry)))
+(aio-defun elfeed-tube--youtube-fetch-captions (urls entry)
+  (pcase-let* ((`(,language . ,xmlcaps)
+                (aio-await (elfeed-tube--youtube-fetch-captions-url urls entry)))
                (sblock (and elfeed-tube-captions-sblock-p
                             (aio-await (elfeed-tube--fetch-captions-sblock entry))))
                (parsed-caps))
-    ;; (print (elfeed-entry-title entry) (get-buffer "*scratch*"))
-    ;; (print language (get-buffer "*scratch*"))
     (when xmlcaps
       (setq parsed-caps (with-temp-buffer
                           (insert xmlcaps)
@@ -986,6 +972,10 @@ The result is a plist with the following keys:
                  (string-match-p "auto-generated" language))
         (elfeed-tube--npreprocess-captions parsed-caps))
       parsed-caps)))
+
+(aio-defun elfeed-tube--fetch-captions (entry)
+  (when-let* ((urls (aio-await (elfeed-tube--fetch-captions-tracks entry))))
+    (aio-await (elfeed-tube--youtube-fetch-captions urls entry))))
 
 (defun elfeed-tube--npreprocess-captions (captions)
   "Preprocess CAPTIONS."
@@ -1027,32 +1017,69 @@ The result is a plist with the following keys:
                   (setf (car telm) cat))
              finally return captions)))
 
+(declare-function elfeed-tube--ytdlp-fetch-desc "elfeed-tube-ytdlp")
+
 ;; Wrapper function to maintain compatibility with original architecture
 (defun elfeed-tube--fetch-desc (entry &optional attempts)
   "Fetch metadata for ENTRY, try ATTEMPTS times."
-  (if elfeed-tube-use-ytdlp-p
-      (elfeed-tube--ytdlp-fetch-desc entry attempts)
-    (elfeed-tube--invidious-fetch-desc entry attempts)))
+  (when (eq elfeed-tube-backend 'yt-dlp) (require 'elfeed-tube-ytdlp))
+  (pcase-exhaustive elfeed-tube-backend
+    ('youtube (elfeed-tube--youtube-fetch-desc entry attempts))
+    ('yt-dlp (elfeed-tube--ytdlp-fetch-desc entry attempts))))
 
-;; Main yt-dlp call and response handling
-(aio-defun elfeed-tube--ytdlp-fetch-desc (entry &optional _attempts)
-  "Return a plist containing description, duration, thumbnail
- url and chapter data for elfeed ENTRY."
-  (let* ((video-id (elfeed-tube--entry-video-id entry))
-         (videodata (aio-await (elfeed-tube--ytdlp-fetch video-id))))
-    (if videodata
-        (list :length (gethash "duration" videodata)
-              :thumb (elfeed-tube--ytdlp-get-thumb
-                      (gethash "thumbnails" videodata))
-              :desc (replace-regexp-in-string
-                     "\n" "<br>" (gethash "description" videodata))
-              :chaps (elfeed-tube--ytdlp-get-chapters
-                      (gethash "chapters" videodata)))
-      (elfeed-tube-log 'error
-                       "[Description][video:%s]: %s"
-                       (elfeed-tube--truncate (elfeed-entry-title entry))
-                       "Could not fetch video data using yt-dlp")
-      (message "Error fetching video data. See log."))))
+(aio-defun elfeed-tube--youtube-fetch-desc (entry &optional attempts)
+  (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
+         (video-id (elfeed-tube--entry-video-id entry)))
+    (when (> attempts 0)
+      (let* ((url (format "https://youtube.com/watch?v=%s" video-id))
+             (response (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
+             (status-code (plist-get response :status-code)))
+        (if-let* (((equal status-code 200))
+                  (video-html (plist-get response :content))
+                  (innertube-api-key
+                   (and (string-match
+                         "\"INNERTUBE_API_KEY\":\"\\([a-zA-Z0-9_-]+\\)" video-html)
+                        (match-string 1 video-html)))
+                  (innertube-response
+                   (aio-await
+                    (elfeed-tube-curl-enqueue
+                     (format "%s?key=%s"
+                             elfeed-tube--innertube-api-url
+                             innertube-api-key)
+                     :method "POST"
+                     :headers '(("Content-Type" . "application/json")
+                                ("Accept-Language" . "en-US"))
+                     :data (json-encode
+                            `((context . ,elfeed-tube--innertube-context)
+                              (videoId . ,video-id))))))
+                  ((= (plist-get innertube-response :status-code) 200)))
+            (condition-case nil
+                (let ((content
+                       (json-parse-string (plist-get innertube-response :content)
+                                          :object-type 'plist))
+                      caps)
+                  ;; Captions
+                  (when (elfeed-tube-include-p 'captions)
+                    (if-let* ((caption-tracks
+                               (map-nested-elt content '(:captions
+                                                         :playerCaptionsTracklistRenderer
+                                                         :captionTracks))))
+                        (setq caps (aio-await (elfeed-tube--youtube-fetch-captions
+                                               caption-tracks entry)))
+                      (elfeed-tube-log 'warn "[Captions][video:%s]: Not available"
+                                       (elfeed-tube--truncate (elfeed-entry-title entry)))))
+                  ;; Rest
+                  (nconc (elfeed-tube--youtube-parse-desc content)
+                         (and caps (list :caps caps))))
+              (json-parse-error
+               (elfeed-tube-log
+                'error "[Description][video:%s]: JSON malformed"
+                (elfeed-tube--truncate (elfeed-entry-title entry)))))
+          (elfeed-tube-log 'debug "[%s][Description]: %s"
+                           url (plist-get response :error-message))
+          (elfeed-tube-log 'warn "[Description][video:%s]: Not available"
+                           (elfeed-tube--truncate (elfeed-entry-title entry)))
+          (aio-await (elfeed-tube--fetch-desc entry (- attempts 1))))))))
 
 (aio-defun elfeed-tube--invidious-fetch-desc (entry &optional attempts)
   (let* ((attempts (or attempts (1+ elfeed-tube--max-retries)))
@@ -1093,11 +1120,11 @@ The result is a plist with the following keys:
                     (elfeed-tube--fetch-desc entry (- attempts 1)))))
               ;; Retry #attempts times
               (elfeed-tube-log 'error
-               "[Description][video:%s][%s]: %s %s"
-               (elfeed-tube--truncate (elfeed-entry-title entry))
-               api-url
-               (plist-get api-response :error-message)
-               (elfeed-tube--attempt-log attempts))
+                               "[Description][video:%s][%s]: %s %s"
+                               (elfeed-tube--truncate (elfeed-entry-title entry))
+                               api-url
+                               (plist-get api-response :error-message)
+                               (elfeed-tube--attempt-log attempts))
               (elfeed-tube--nrotate-invidious-servers)
               (aio-await
                (elfeed-tube--fetch-desc entry (- attempts 1)))))
@@ -1111,109 +1138,69 @@ The result is a plist with the following keys:
 
 (aio-defun elfeed-tube--fetch-1 (entry &optional force-fetch)
   (when (elfeed-tube--youtube-p entry)
-    (let* ((fields (aio-make-select))
-           (cached (elfeed-tube--gethash entry))
-           desc thumb duration caps sblock chaps error)
+   (let* ((cached (elfeed-tube--gethash entry))
+          desc thumb duration caps sblock chaps error)
       
-      ;; When to fetch a field:
-      ;; - force-fetch is true: always fetch
-      ;; - entry not cached, field not saved: fetch
-      ;; - entry not cached but saved: don't fetch
-      ;; - entry is cached with errors: don't fetch
-      ;; - entry is cached without errors, field not empty: don't fetch
-      ;; - entry is saved and field not empty: don't fetch
+    ;; When to fetch a field:
+    ;; - force-fetch is true: always fetch
+    ;; - entry not cached, field not saved: fetch
+    ;; - entry not cached but saved: don't fetch
+    ;; - entry is cached with errors: don't fetch
+    ;; - entry is cached without errors, field not empty: don't fetch
+    ;; - entry is saved and field not empty: don't fetch
 
-      ;; Fetch description?
-      (when (and (cl-some #'elfeed-tube-include-p
-                          '(description duration thumbnail chapters))
-                 (or force-fetch
-                     (not (or (and cached
-                                   (or (cl-intersection
-                                        '(desc duration thumb chapters)
-                                        (elfeed-tube-item-error cached))
-                                       (elfeed-tube-item-len cached)
-                                       (elfeed-tube-item-desc cached)
-                                       (elfeed-tube-item-thumb cached)))
-                              (or (elfeed-entry-content entry)
-                                  (elfeed-meta entry :thumb)
-                                  (elfeed-meta entry :duration))))))
-        (aio-select-add fields
-                        (elfeed-tube--with-label
-                         'desc #'elfeed-tube--fetch-desc entry)))
-
-      ;; Fetch captions?
-      (when (and (elfeed-tube-include-p 'captions)
-                 (or force-fetch
-                     (not (or (and cached
-                                   (or (elfeed-tube-item-caps cached)
-                                       (memq 'caps (elfeed-tube-item-error cached))))
-                              (elfeed-ref-p
-                               (elfeed-meta entry :caps))))))
-        (aio-select-add fields
-                        (elfeed-tube--with-label
-                         'caps #'elfeed-tube--fetch-captions entry))
-        ;; Fetch caption sblocks?
-        (when (and nil elfeed-tube-captions-sblock-p)
-          (aio-select-add fields
-                          (elfeed-tube--with-label
-                           'sblock #'elfeed-tube--fetch-captions-sblock entry))))
+    (when (or force-fetch
+           (not (or (and cached
+                     (or (cl-intersection
+                          '(desc duration thumb caps)
+                          (elfeed-tube-item-error cached))
+                      (elfeed-tube-item-len cached)
+                      (elfeed-tube-item-desc cached)
+                      (elfeed-tube-item-thumb cached)))
+                 (or (elfeed-entry-content entry)
+                  (elfeed-meta entry :thumb)
+                  (elfeed-meta entry :duration)
+                  (elfeed-meta entry :caps)))))
       
-      ;; Record fields?
-      (while (aio-select-promises fields)
-        (pcase-let ((`(,label . ,data)
-                     (aio-await (aio-await (aio-select fields)))))
-          (pcase label
-            ('desc
-             (if data
-                 (progn
-                   (when (elfeed-tube-include-p 'thumbnail)
-                     (setf thumb
-                           (plist-get data :thumb)))
-                   (when (elfeed-tube-include-p 'description)
-                     (setf desc
-                           (plist-get data :desc)))
-                   (when (elfeed-tube-include-p 'duration)
-                     (setf duration
-                           (plist-get data :length)))
-                   (when (elfeed-tube-include-p 'chapters)
-                     (setf chaps
-                           (plist-get data :chaps))))
-               (setq error (append error '(desc duration thumb)))))
-            ('caps
-             (if data
-                 (setf caps data)
-               (push 'caps error)))
-            ('sblock
-             (and data (setf sblock data))))))
+     (if-let* ((data (aio-await (elfeed-tube--fetch-desc entry))))
+         (progn
+           (when (elfeed-tube-include-p 'thumbnail)
+            (setf thumb (plist-get data :thumb)))
+           (when (elfeed-tube-include-p 'description)
+            (setf desc (plist-get data :desc)))
+           (when (elfeed-tube-include-p 'duration)
+            (setf duration (plist-get data :length)))
+           (when (elfeed-tube-include-p 'chapters)
+            (setf chaps (plist-get data :chaps)))
+           (when (elfeed-tube-include-p 'captions)
+            (setf caps (plist-get data :caps))))
+       (setq error (append error '(desc duration thumb caps)))))
       
-      ;; Add (optional) sblock and chapter info to caps
-      (when caps
-        (when sblock
-          (setf caps (elfeed-tube--sblock-captions sblock caps)))
-        (when chaps
-          (setf (cadr caps) chaps)))
+    ;; Add (optional) sblock and chapter info to caps
+    (when caps
+     (when chaps (setf (cadr caps) chaps)))
       
-      (if (and elfeed-tube-auto-save-p
-               (or duration caps desc thumb))
-          ;; Store in db
-          (progn (elfeed-tube--write-db
-                  entry
-                  (elfeed-tube-item--create
-                   :len duration :desc desc :thumb thumb
-                   :caps caps))
-                 (elfeed-tube-log
-                  'info "Saved to elfeed-db: %s"
-                  (elfeed-entry-title entry)))
-        ;; Store in session cache
-        (when (or duration caps desc thumb error)
-          (elfeed-tube--puthash
-           entry
-           (elfeed-tube-item--create
-            :len duration :desc desc :thumb thumb
-            :caps caps :error error)
-           force-fetch)))
-      ;; Return t if something was fetched
-      (and (or duration caps desc thumb) t))))
+    (if (and elfeed-tube-auto-save-p
+         (or duration caps desc thumb))
+        ;; Store in db
+        (progn (elfeed-tube--write-db
+                entry
+                (elfeed-tube-item--create
+                 :len duration :desc desc :thumb thumb
+                 :caps caps))
+         (elfeed-tube-log
+          'info "Saved to elfeed-db: %s"
+          (elfeed-entry-title entry)))
+      ;; Store in session cache
+      (when (or duration caps desc thumb error)
+       (elfeed-tube--puthash
+        entry
+        (elfeed-tube-item--create
+         :len duration :desc desc :thumb thumb
+         :caps caps :error error)
+        force-fetch)))
+    ;; Return t if something was fetched
+    (and (or duration caps desc thumb) t))))
 
 ;; Interaction
 (defun elfeed-tube--browse-at-time (pos)

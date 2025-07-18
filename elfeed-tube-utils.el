@@ -397,33 +397,6 @@ This function returns a promise."
             (aio-await
              (elfeed-tube--aio-fetch url next desc (1- attempts)))))))))
 
-(aio-defun elfeed-tube--ytdlp-fetch (url)
-  "Return a hash table of the JSON dump as retrieved by yt-dlp.
-
-URL is the video id or url.  The data is cached in a global hash
-table."
-  (unless (executable-find "yt-dlp")
-    (user-error
-     "Could not find yt-dlp executable. Please install yt-dlp or add to path."))
-  (or (gethash url elfeed-tube--ytdlp-table)
-      (let* ((yt-proc
-              (start-process
-               "yt-dlp" (get-buffer-create url)
-               "yt-dlp" "--quiet" "--skip-download" "--dump-json" url))
-             (promise (aio-promise)))
-        (set-process-query-on-exit-flag yt-proc nil)
-        (set-process-sentinel
-         yt-proc (lambda (_ status) (aio-resolve promise (lambda () status))))
-        (aio-await promise)
-        (prog1 (ignore-errors
-                 (with-current-buffer url
-                   (goto-char (point-min))
-                   (when (re-search-forward "^{" nil t)
-                     (forward-line 0)
-                     (puthash url (json-parse-buffer :array-type 'list)
-                              elfeed-tube--ytdlp-table))))
-          (kill-buffer url)))))
-
 (defun elfeed-tube--entry-create (feed-id entry-data)
   "Create an Elfeed entry from ENTRY-DATA for feed with id FEED-ID.
 
@@ -464,13 +437,15 @@ is a plist of video metadata."
                    (elfeed-tube-auto-save-p nil)
                    (api-data
                     (if elfeed-tube-use-ytdlp-p
-                        (when-let* ((videodata (aio-await
-                                                (elfeed-tube--ytdlp-fetch video-id))))
-                          (list :authorUrl (gethash "channel_id" videodata)
-                                :author    (gethash "uploader" videodata)
-                                :title     (gethash "title" videodata)
-                                :published (gethash "timestamp" videodata)
-                                :videoId   (gethash "id" videodata)))
+                        (progn
+                          (require 'elfeed-tube-ytdlp)
+                          (when-let* ((videodata (aio-await
+                                                  (elfeed-tube--ytdlp-fetch video-id))))
+                            (list :authorUrl (plist-get videodata :channel_id)
+                                  :author    (plist-get videodata :uploader)
+                                  :title     (plist-get videodata :title)
+                                  :published (plist-get videodata :timestamp)
+                                  :videoId   (plist-get videodata :id))))
                       (aio-await
                        (elfeed-tube--aio-fetch
                         (concat (aio-await (elfeed-tube--get-invidious-url))
