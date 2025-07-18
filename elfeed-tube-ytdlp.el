@@ -26,9 +26,23 @@
 ;;; Code:
 (require 'aio)
 
+(defvar elfeed-tube-thumbnail-size)
+(declare-function elfeed-tube--entry-video-id "elfeed-tube")
+(declare-function elfeed-tube-include-p "elfeed-tube")
+(declare-function elfeed-tube-log "elfeed-tube")
+(declare-function elfeed-tube--truncate "elfeed-tube")
+(declare-function elfeed-entry-title "elfeed-tube")
+(declare-function elfeed-tube-curl-enqueue "elfeed-tube")
+(declare-function elfeed-tube--fetch-captions-sblock "elfeed-tube")
+(declare-function elfeed-tube--sblock-captions "elfeed-tube")
+(declare-function elfeed-tube--npreprocess-captions "elfeed-tube")
+(defvar elfeed-tube-captions-puntcuate-p)
+(defvar elfeed-tube-captions-sblock-p)
+(defvar elfeed-tube-captions-languages)
+
 (defconst elfeed-tube--ytdlp-thumb-sizes
-    '(large 480 medium 360 small 188)
-    "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp
+  '(large 480 medium 360 small 188)
+  "Mapping from elfeed-tube thumbnail sizes to standard yt-dlp
 thumbnail image heights")
 
 (aio-defun elfeed-tube--ytdlp-fetch (url)
@@ -48,6 +62,7 @@ table."
     (set-process-sentinel
      yt-proc (lambda (_ status) (aio-resolve promise (lambda () status))))
     (aio-await promise)
+    ;; TODO: Handle json-parse-error
     (prog1 (ignore-errors
              (with-current-buffer url
                (goto-char (point-min))
@@ -114,18 +129,14 @@ json dump and return the url for the thumbnail of required size."
          (chosen-caption
           (cl-loop
            for lang in elfeed-tube-captions-languages
-           for pick =
-           (cl-some
-            (lambda (el)
-              (when-let* ((arr (plist-get caption-plist
-                                          (intern (concat ":" (car (split-string lang)))))))
-                (cl-some (lambda (type-plist)
-                           (and (equal (plist-get type-plist :ext) "srv3")
-                                type-plist))
-                         arr)))
-            caption-plist)
-           until pick
-           finally return pick))
+           for arr = (plist-get
+                      caption-plist
+                      (intern (concat ":" (car (split-string lang)))))
+           if (cl-some (lambda (type-plist)
+                         (and (equal (plist-get type-plist :ext) "srv3")
+                              type-plist))
+                       arr)
+           return it))
          base-url language)
     (cond
      ((not caption-plist)
