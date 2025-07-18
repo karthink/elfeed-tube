@@ -23,6 +23,7 @@
 ;;; Code:
 
 (require 'elfeed-tube)
+(require 'elfeed-tube-invidious)
 
 (declare-function elfeed-tube--get-entries "elfeed-tube")
 (defvar elfeed-tube--api-channels-videos-path "/api/v1/channels/%s/videos")
@@ -265,7 +266,7 @@ corrected/added as the value of the plist's :published key."
                  do (push (elfeed-tube--with-label
                            video-id #'elfeed-tube--aio-fetch
                            (concat (aio-wait-for (elfeed-tube--get-invidious-url))
-                                   elfeed-tube--api-videos-path
+                                   elfeed-tube--invidious-api-videos-path
                                    video-id "?fields=published"))
                           date-queries))
 

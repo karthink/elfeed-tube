@@ -23,30 +23,166 @@
 (declare-function elfeed-tube--with-label "elfeed-tube")
 (declare-function elfeed-tube--fetch-1 "elfeed-tube")
 (declare-function elfeed-tube-show "elfeed-tube")
-(declare-function elfeed-tube-curl-enqueue "elfeed-tube")
-(declare-function elfeed-tube--attempt-log "elfeed-tube")
-(declare-function elfeed-tube-log "elfeed-tube")
 (declare-function elfeed-tube--get-invidious-url "elfeed-tube")
 (declare-function elfeed-tube--nrotate-invidious-servers "elfeed-tube")
 
 (defvar elfeed-tube-youtube-regexp)
-(defvar elfeed-tube--api-videos-path)
+(defvar elfeed-tube--invidious-api-videos-path)
 (defvar elfeed-tube--max-retries)
 (defvar elfeed-tube-use-ytdlp-p)
 
-(defvar elfeed-tube--ytdlp-table (make-hash-table :test #'equal)
-  "Hash table for storing yt-dlp output.")
+
+(defvar elfeed-tube--max-retries 2)
+
+;;; Helpers
+
+(defsubst elfeed-tube-include-p (field)
+  "Check if FIELD should be fetched."
+  (memq field elfeed-tube-fields))
+
+(defsubst elfeed-tube--get-entries ()
+  "Get elfeed entry at point or in active region."
+  (pcase major-mode
+    ('elfeed-search-mode
+     (elfeed-search-selected))
+    ('elfeed-show-mode
+     (list elfeed-show-entry))))
+
+(defsubst elfeed-tube--youtube-p (entry)
+  "Check if ENTRY is a Youtube video entry."
+  (string-match-p elfeed-tube-youtube-regexp
+                  (elfeed-entry-link entry)))
+
+(defsubst elfeed-tube--url-video-id (url)
+  "Get YouTube video URL's video-id."
+  (and (string-match
+         (concat
+          elfeed-tube-youtube-regexp
+          "\\(?:watch\\?v=\\|shorts/\\)?"
+          "\\([^?&]+\\)")
+         url)
+    (match-string 1 url)))
+
+(defsubst elfeed-tube--entry-video-id (entry)
+  "Get Youtube video ENTRY's video-id."
+  (when-let* (((elfeed-tube--youtube-p entry))
+              (link (elfeed-entry-link entry)))
+    (elfeed-tube--url-video-id link)))
+
+(defsubst elfeed-tube--random-elt (collection)
+  "Random element from COLLECTION."
+  (and collection
+       (elt collection (cl-random (length collection)))))
+
+(defsubst elfeed-tube-log (level fmt &rest objects)
+  "Log OBJECTS with FMT at LEVEL using `elfeed-log'."
+  (let ((elfeed-log-buffer-name "*elfeed-tube-log*"))
+    (apply #'elfeed-log level fmt objects)
+    nil))
+
+(defsubst elfeed-tube--attempt-log (attempts)
+  "Format ATTEMPTS as a string."
+  (format "(attempt %d/%d)"
+          (1+ (- elfeed-tube--max-retries
+                 attempts))
+          elfeed-tube--max-retries))
+
+(defsubst elfeed-tube--thumbnail-html (thumb)
+  "HTML for inserting THUMB."
+  (when (and (elfeed-tube-include-p 'thumbnail) thumb)
+    (concat "<br><img src=\"" thumb "\"></a><br><br>")))
+
+(defsubst elfeed-tube--timestamp (time)
+  "Format for TIME as timestamp."
+  (format "%d:%02d" (floor time 60) (mod time 60)))
+
+(defsubst elfeed-tube--same-entry-p (entry1 entry2)
+  "Test if elfeed ENTRY1 and ENTRY2 are the same."
+  (equal (elfeed-entry-id entry1)
+         (elfeed-entry-id entry2)))
+
+(defsubst elfeed-tube--match-captions-langs (lang el)
+  "Find caption track matching LANG in plist EL."
+  (and (or (string-match-p
+            lang
+            (plist-get el :languageCode))
+           (string-match-p
+            lang
+            (thread-first (plist-get el :name)
+                          (plist-get :simpleText))))
+       el))
+
+(defsubst elfeed-tube--truncate (str)
+  "Truncate STR."
+  (truncate-string-to-width str 20))
+
+(defmacro elfeed-tube--with-db (db-dir &rest body)
+  "Execute BODY with DB-DIR set as the `elfeed-db-directory'."
+  (declare (indent defun))
+  `(let ((elfeed-db-directory ,db-dir))
+     ,@body))
+
+(defsubst elfeed-tube--caption-get-face (type)
+  "Get caption face for TYPE."
+  (or (alist-get type elfeed-tube-captions-faces)
+      'variable-pitch))
+
+(defun elfeed-tube--browse-at-time (pos)
+  "Browse video URL at POS at current time."
+  (interactive "d")
+  (when-let ((time (get-text-property pos 'timestamp)))
+    (browse-url (concat "https://youtube.com/watch?v="
+                        (elfeed-tube--entry-video-id elfeed-show-entry)
+                        "&t="
+                        (number-to-string (floor time))))))
 
 (defsubst elfeed-tube--ensure-list (var)
   "Ensure VAR is a list."
   (if (listp var) var (list var)))
 
+(defsubst elfeed-tube--video-p (cand)
+  "Check if CAND is a Youtube video URL."
+  (string-match
+   (concat
+    elfeed-tube-youtube-regexp
+    (rx (zero-or-one "watch?v=")
+        (group (1+ (not "&")))))
+   cand))
+
+;;; Main fetcher
+
+(defun elfeed-tube-curl-enqueue (url &rest args)
+  "Fetch URL with ARGS using Curl.
+
+Like `elfeed-curl-enqueue' but delivered by a promise.
+
+The result is a plist with the following keys:
+:success -- the callback argument (t or nil)
+:headers -- `elfeed-curl-headers'
+:status-code -- `elfeed-curl-status-code'
+:error-message -- `elfeed-curl-error-message'
+:location -- `elfeed-curl-location'
+:content -- (buffer-string)"
+  (let* ((promise (aio-promise))
+         (cb (lambda (success)
+               (let ((result (list :success success
+                                   :headers elfeed-curl-headers
+                                   :status-code elfeed-curl-status-code
+                                   :error-message elfeed-curl-error-message
+                                   :location elfeed-curl-location
+                                   :content (buffer-string))))
+                 (aio-resolve promise (lambda () result))))))
+    (prog1 promise
+      (apply #'elfeed-curl-enqueue url cb args))))
+
+;;; Finding feeds and adding channels
+
+;;;###autoload (autoload 'elfeed-tube-add-feeds "elfeed-tube-utils" "Add youtube feeds to the Elfeed database by QUERIES." t nil)
 (cl-defstruct (elfeed-tube-channel (:constructor elfeed-tube-channel-create)
                                    (:copier nil))
   "Struct to hold youtube channel information."
   query author url feed)
 
-;;;###autoload (autoload 'elfeed-tube-add-feeds "elfeed-tube-utils" "Add youtube feeds to the Elfeed database by QUERIES." t nil)
 (aio-defun elfeed-tube-add-feeds (queries &optional _)
   "Add youtube feeds to the Elfeed database by QUERIES.
 
@@ -70,15 +206,6 @@ queries."
   (let ((channels (aio-await (elfeed-tube-add--get-channels queries))))
     (elfeed-tube-add--display-channels channels)))
 
-(defsubst elfeed-tube--video-p (cand)
-  "Check if CAND is a Youtube video URL."
-  (string-match
-   (concat
-    elfeed-tube-youtube-regexp
-    (rx (zero-or-one "watch?v=")
-        (group (1+ (not "&")))))
-   cand))
-
 (defsubst elfeed-tube--playlist-p (cand)
   "Check if CAND is a Youtube playlist URL."
   (string-match
@@ -97,7 +224,10 @@ queries."
         (group (1+ (not "&")))))
    cand))
 
+(declare-function elfeed-tube--aio-fetch "elfeed-tube-invidious")
+
 (aio-defun elfeed-tube-add--get-channels (queries)
+  (require 'elfeed-tube-invidious)
   (let* ((fetches (aio-make-select))
          (queries (elfeed-tube--ensure-list queries))
          (playlist-base-url
@@ -144,11 +274,11 @@ queries."
                                 playlist-id
                                 "?fields=title,author"))
                (feed (concat playlist-base-url playlist-id)))
-            (aio-select-add fetches
-                            (elfeed-tube--with-label
-                             `(:type playlist :feed ,feed :query ,q)
-                             #'elfeed-tube--aio-fetch
-                             api-url #'elfeed-tube--nrotate-invidious-servers))))
+          (aio-select-add fetches
+                          (elfeed-tube--with-label
+                           `(:type playlist :feed ,feed :query ,q)
+                           #'elfeed-tube--aio-fetch
+                           api-url #'elfeed-tube--nrotate-invidious-servers))))
        
        ((elfeed-tube--video-p q)
         (if-let* ((video-id (match-string 1 q))
@@ -165,17 +295,17 @@ queries."
           (push (elfeed-tube-channel-create :query q)
                 channels)))
        
-       (t ;interpret as search query
+       (t                               ;interpret as search query
         (let* ((search-url "/api/v1/search")
                (api-url (concat (aio-await (elfeed-tube--get-invidious-url))
                                 search-url
                                 "?q=" (url-hexify-string q)
                                 "&type=channel&page=1")))
-            (aio-select-add fetches
-                            (elfeed-tube--with-label
-                             `(:type search :query ,q)
-                             #'elfeed-tube--aio-fetch
-                             api-url #'elfeed-tube--nrotate-invidious-servers))))))
+          (aio-select-add fetches
+                          (elfeed-tube--with-label
+                           `(:type search :query ,q)
+                           #'elfeed-tube--aio-fetch
+                           api-url #'elfeed-tube--nrotate-invidious-servers))))))
     
     ;; Resolve all promises in the aio-select
     (while (aio-select-promises fetches)
@@ -362,40 +492,7 @@ afterwards."
              finally (kill-new (prin1-to-string feeds)))
     (message "Feed URLs saved to kill-ring.")))
 
-(aio-defun elfeed-tube--aio-fetch (url &optional next desc attempts)
-  "Fetch URL asynchronously using `elfeed-curl-retrieve'.
-
-If successful (HTTP 200), return the JSON-parsed result as a
-plist.
-
-Otherwise, call the function NEXT (with no arguments) and try
-ATTEMPTS more times. Return nil if all attempts fail. DESC is a
-description string to print to the elfeed-tube log allong with
-any other error messages.
-
-This function returns a promise."
-  (let ((attempts (or attempts (1+ elfeed-tube--max-retries))))
-    (when (> attempts 0)
-      (let* ((response
-              (aio-await (elfeed-tube-curl-enqueue url :method "GET")))
-             (content (plist-get response :content))
-             (status (plist-get response :status-code))
-             (error-msg (plist-get response :error-message)))
-        (cond
-         ((equal status 200)
-          (condition-case nil
-              (json-parse-string content :object-type 'plist)
-            ((json-parse-error error)
-             (elfeed-tube-log 'error "[Search] JSON malformed (%s)"
-                              (elfeed-tube--attempt-log attempts))
-             (and (functionp next) (funcall next))
-             (aio-await
-              (elfeed-tube--aio-fetch url next desc (1- attempts))))))
-         (t (elfeed-tube-log 'error "[Search][%s]: %s (%s)" error-msg url
-                             (elfeed-tube--attempt-log attempts))
-            (and (functionp next) (funcall next))
-            (aio-await
-             (elfeed-tube--aio-fetch url next desc (1- attempts)))))))))
+;;; Creating fake entries
 
 (defun elfeed-tube--entry-create (feed-id entry-data)
   "Create an Elfeed entry from ENTRY-DATA for feed with id FEED-ID.
@@ -473,7 +570,7 @@ is a plist of video metadata."
                        (aio-await
                         (elfeed-tube--aio-fetch
                          (concat (aio-await (elfeed-tube--get-invidious-url))
-                                 elfeed-tube--api-videos-path
+                                 elfeed-tube--invidious-api-videos-path
                                  video-id
                                  "?fields="
                                  ;; "videoThumbnails,descriptionHtml,lengthSeconds,"
@@ -502,6 +599,8 @@ is a plist of video metadata."
             (use-local-map (copy-keymap elfeed-show-mode-map))
             (local-set-key (kbd "q") 'quit-window))))
     (message "Not a youtube video URL, aborting.")))
+
+;;; Navigation
 
 (defsubst elfeed-tube--line-at-point ()
   "Get line around point."
