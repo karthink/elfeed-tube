@@ -731,9 +731,9 @@ This does the following:
                         length-seconds)
               :thumb thumb
               :desc (replace-regexp-in-string "\n" "<br>"
-                                              (replace-regexp-in-string
-                                               "\\(https?://[^[:space:][:cntrl:]]+\\)"
-                                               "<a href=\"\\1\">\\1</a>" desc))
+                     (replace-regexp-in-string
+                      (concat "\\(" browse-url-button-regexp "\\)")
+                      "<a href=\"\\1\">\\1</a>" desc))
               :chaps chapters)))))
 
 (aio-defun elfeed-tube--youtube-fetch-captions-url (caption-plist entry)
