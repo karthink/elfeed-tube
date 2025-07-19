@@ -730,7 +730,10 @@ This does the following:
                           (string-to-number length-seconds)
                         length-seconds)
               :thumb thumb
-              :desc (replace-regexp-in-string "\n" "<br>" desc)
+              :desc (replace-regexp-in-string "\n" "<br>"
+                                              (replace-regexp-in-string
+                                               "\\(https?://[^[:space:][:cntrl:]]+\\)"
+                                               "<a href=\"\\1\">\\1</a>" desc))
               :chaps chapters)))))
 
 (aio-defun elfeed-tube--youtube-fetch-captions-url (caption-plist entry)
