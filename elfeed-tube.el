@@ -821,10 +821,9 @@ This does the following:
       (setq parsed-caps (with-temp-buffer
                           (insert xmlcaps)
                           (goto-char (point-min))
-                          (dolist (reps '(("&amp;#39;"  . "'")
-                                          ("&amp;quot;" . "\"")
-                                          ("\n"         . " ")
-                                          (" "          . "")))
+                          (dolist (reps '(("\n"    . " ")
+                                          ("&amp;" . "&")
+                                          (" "     . "")))
                             (save-excursion
                               (while (search-forward (car reps) nil t)
                                 (replace-match (cdr reps) nil t))))
