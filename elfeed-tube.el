@@ -606,12 +606,15 @@ This does the following:
       (save-excursion (insert desc))
       (while (re-search-forward
               ;; "<a href=.*?data-jump-time=\"\\([0-9]+\\)\".*?</a>\\(?:\\s-\\|\\s)\\|-\\)+\\(.*\\)$"
-              "\\([0-9]+?\\):\\([0-9]\\{2\\}\\) *\\(.*\\)$"
+              "\\(?:\\([0-9]+\\):\\)?\\([0-9]+?\\):\\([0-9]\\{2\\}\\) *-? *\\(.*\\)$"
               nil t)
-        (push (cons (number-to-string
-                     (+ (* 60 (string-to-number (match-string 1)))
-                        (string-to-number (match-string 2))))
-                    (match-string 3)
+        (push (cons (number-to-string   ;MM:SS timestamp
+                     (+ (if (match-string 1)
+                            (* 3600 (string-to-number (match-string 1)))
+                          0)
+                        (* 60 (string-to-number (match-string 2)))
+                        (string-to-number (match-string 3))))
+                    (match-string 4)
                     ;; (match-string 1)
                     ;; (thread-last (match-string 2)
                     ;;              (replace-regexp-in-string
