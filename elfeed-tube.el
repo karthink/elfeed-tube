@@ -261,12 +261,12 @@ paragraphs or sections. It must be a positive integer."
     map))
 
 (defface elfeed-tube-chapter-face
-  '((t :inherit (variable-pitch elfeed-show-entry-feed-face)
+  '((t :inherit (variable-pitch elfeed-show-feed-face)
        :weight bold))
   "Face used for chapter headings displayed by Elfeed Tube.")
 
 (defface elfeed-tube-timestamp-face
-  '((t :inherit (variable-pitch elfeed-show-entry-date-face)
+  '((t :inherit (variable-pitch elfeed-show-date-face)
        :weight semi-bold))
   "Face used for transcript timestamps displayed by Elfeed Tube.")
 
@@ -363,11 +363,11 @@ buffer."
           
           (goto-char (point-max))
           (when (text-property-search-backward
-                 'face 'elfeed-show-entry-header-face)
+                 'face 'elfeed-show-header-face)
             (beginning-of-line)
             (when (looking-at "Transcript:")
               (text-property-search-backward
-               'face 'elfeed-show-entry-header-face)
+               'face 'elfeed-show-header-face)
               (beginning-of-line)))
           
           ;; Duration
@@ -468,9 +468,9 @@ buffer."
                                          (point)))
 	(end-of-line)
 	(insert "\n"))
-      (insert (propertize "Duration: " 'face 'elfeed-show-entry-header-face)
+      (insert (propertize "Duration: " 'face 'elfeed-show-header-face)
               (propertize (elfeed-tube--timestamp duration)
-                          'face 'elfeed-show-entry-date-face)
+                          'face 'elfeed-show-date-face)
               "\n")
       t)))
 
@@ -515,7 +515,7 @@ buffer."
         (goto-char (point-max))
         (unless (eq (char-before) 10) (insert "\n"))
         (insert "\n"
-                (propertize "Transcript:" 'face 'elfeed-show-entry-header-face)
+                (propertize "Transcript:" 'face 'elfeed-show-header-face)
                 "\n\n")
         (cl-loop for (start end para) in caption-ordered
                  with chapters = (car-safe (cdr caption))
