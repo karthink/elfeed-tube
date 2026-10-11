@@ -117,12 +117,15 @@
 
 (defsubst elfeed-tube--match-captions-langs (lang el)
   "Find caption track matching LANG in plist EL."
+  ;; LANG is an unescaped string (e.g. "en", "english (auto generated)"),
+  ;; but it is used as a regexp here.  Match it anchored to the start of
+  ;; the track's language code or name to avoid false positives.
   (and (or (and-let* ((code (plist-get el :languageCode)))
-             (string-match-p lang code))
+             (string-match-p (concat "\\`" lang) code))
            (and-let* ((name (or (map-nested-elt el '(:name :runs 0 :text))
                                 (thread-first (plist-get el :name)
                                               (plist-get :simpleText)))))
-             (string-match-p lang name)))
+             (string-match-p (concat "\\`" lang) name)))
        el))
 
 (defsubst elfeed-tube--truncate (str)
